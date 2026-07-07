@@ -699,11 +699,21 @@ body.light-mode .items-table tr:hover {
 }
 
 .items-table tr.completed-row {
-    background-color: rgba(16, 185, 129, 0.02);
+    background-color: rgba(16, 185, 129, 0.02) !important;
+    opacity: 0.6;
 }
 
 .items-table tr.completed-row td {
     color: var(--text-muted);
+}
+
+.items-table tr.no-ean-row {
+    background-color: rgba(239, 68, 68, 0.07) !important;
+    border-left: 4px solid #ef4444 !important;
+}
+
+body.light-mode .items-table tr.no-ean-row {
+    background-color: rgba(239, 68, 68, 0.04) !important;
 }
 
 /* Selos (Badges) */

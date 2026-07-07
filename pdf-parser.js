@@ -190,10 +190,12 @@ class PdfParser {
                 let ean = '';
                 let sku = '';
                 let descricao = '';
+                let temEan = false;
                 
                 // Se a linha atual (sem a quantidade) contém apenas dígitos (ex: EAN de 8 a 14 dígitos)
                 if (/^\d{8,14}$/.test(cleanLine)) {
                     ean = cleanLine;
+                    temEan = true;
                     
                     // O SKU e a descrição devem estar nas linhas anteriores
                     const prevLine = i > 0 ? lines[i - 1].trim() : '';
@@ -247,6 +249,7 @@ class PdfParser {
                         }
                     }
                     ean = sku; // Sem EAN separado, o buscador assume o SKU
+                    temEan = false;
                 }
                 
                 items.push({
@@ -258,6 +261,7 @@ class PdfParser {
                     descricao: descricao.trim(),
                     sku: sku.trim(),
                     ean: ean.trim(),
+                    temEan: temEan, // Flag booliana que indica se há EAN real extraído do PDF
                     quantidade: quantidade,
                     quantidadeOriginal: quantidade, // Mantém para progresso
                     expedido: false
