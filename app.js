@@ -28,7 +28,6 @@ function initElements() {
     elements.soundToggle = document.getElementById('sound-toggle');
     elements.dropArea = document.getElementById('drop-area');
     elements.fileInput = document.getElementById('pdf-file-input');
-    elements.loadTestPdfBtn = document.getElementById('load-test-pdf');
     elements.importCard = document.getElementById('import-card');
     elements.readerCard = document.getElementById('reader-card');
     elements.barcodeForm = document.getElementById('barcode-form');
@@ -190,9 +189,6 @@ function initEventListeners() {
         }
     });
 
-    // Botão para carregar PDF de teste local
-    elements.loadTestPdfBtn.addEventListener('click', loadLocalTestPdf);
-
     // Form de Leitura de SKU
     elements.barcodeForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -302,13 +298,9 @@ async function handlePdfFile(file) {
 // Configura o visual de carregando
 function showLoadingState(isLoading) {
     if (isLoading) {
-        elements.loadTestPdfBtn.disabled = true;
-        elements.loadTestPdfBtn.textContent = '⏳ Processando PDF...';
         elements.dropArea.style.opacity = '0.5';
         elements.dropArea.style.pointerEvents = 'none';
     } else {
-        elements.loadTestPdfBtn.disabled = false;
-        elements.loadTestPdfBtn.textContent = '⚡ Carregar Modelo de Teste (teste.pdf)';
         elements.dropArea.style.opacity = '1';
         elements.dropArea.style.pointerEvents = 'auto';
     }
