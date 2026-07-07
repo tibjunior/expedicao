@@ -338,7 +338,7 @@ function onDataLoaded() {
     elements.readerCard.style.display = 'block';
     elements.readerCard.classList.remove('disabled-card');
     elements.barcodeInput.disabled = false;
-    elements.barcodeInput.placeholder = 'Aponte o leitor e escaneie o SKU...';
+    elements.barcodeInput.placeholder = 'Aponte o leitor e escaneie o EAN...';
     elements.btnSubmitSku.disabled = false;
     elements.btnCameraScan.disabled = false;
     elements.progressCard.style.display = 'block';
@@ -372,12 +372,13 @@ function processBarcodeRead(rawSku) {
     
     // Procurar por itens pendentes com este SKU ou EAN
     // (Pode ser correspondência exata de SKU ou de EAN-13/GTIN)
+    // Procurar por itens pendentes prioritariamente pelo EAN.
+    // Fallback para SKU apenas se o item não tiver EAN.
     let matchedItem = state.items.find(item => 
         !item.expedido && 
         (
-            item.sku.toUpperCase() === sku || 
-            item.sku.replace(/[^A-Z0-9]/g, '') === sku.replace(/[^A-Z0-9]/g, '') ||
-            (item.ean && (item.ean.toUpperCase() === sku || item.ean.replace(/[^0-9]/g, '') === sku.replace(/[^0-9]/g, '')))
+            (item.ean && (item.ean.toUpperCase() === sku || item.ean.replace(/[^0-9]/g, '') === sku.replace(/[^0-9]/g, ''))) ||
+            (!item.ean && (item.sku.toUpperCase() === sku || item.sku.replace(/[^A-Z0-9]/g, '') === sku.replace(/[^A-Z0-9]/g, '')))
         )
     );
     
@@ -408,7 +409,7 @@ function processBarcodeRead(rawSku) {
             // Beep duplo para item finalizado
             playBeep(1000, 80, 'sine');
             setTimeout(() => playBeep(1300, 100, 'sine'), 100);
-            showToast('Item Expedido', `Concluído: ${matchedItem.descricao} (${matchedItem.sku})`, 'success');
+            showToast('Item Expedido', `Concluído: ${matchedItem.descricao} (EAN: ${matchedItem.ean})`, 'success');
         } else {
             // Beep simples para unidade contabilizada
             playBeep(1000, 100, 'sine');
@@ -418,14 +419,13 @@ function processBarcodeRead(rawSku) {
         // Verificar se toda a lista foi concluída
         checkAllCompleted();
     } else {
-        // SKU não encontrado na fila de pendentes
+        // SKU/EAN não encontrado na fila de pendentes
         // Pode ser que já tenha sido totalmente expedido ou não exista no PDF
         const alreadyExpedidos = state.items.filter(item => 
             item.expedido && 
             (
-                item.sku.toUpperCase() === sku || 
-                item.sku.replace(/[^A-Z0-9]/g, '') === sku.replace(/[^A-Z0-9]/g, '') ||
-                (item.ean && (item.ean.toUpperCase() === sku || item.ean.replace(/[^0-9]/g, '') === sku.replace(/[^0-9]/g, '')))
+                (item.ean && (item.ean.toUpperCase() === sku || item.ean.replace(/[^0-9]/g, '') === sku.replace(/[^0-9]/g, ''))) ||
+                (!item.ean && (item.sku.toUpperCase() === sku || item.sku.replace(/[^A-Z0-9]/g, '') === sku.replace(/[^A-Z0-9]/g, '')))
             )
         );
         
@@ -623,8 +623,10 @@ function renderTable() {
             </td>
             <td>
                 <div class="sku-cell">
-                    <span class="sku-badge">${item.sku}</span>
-                    ${item.ean && item.ean !== item.sku ? `<span class="ean-subtext" style="display:block; font-size:10px; color:var(--text-secondary); margin-top:4px; font-family:monospace; background:rgba(255,255,255,0.05); padding:2px 4px; border-radius:4px; width:fit-content;">EAN: ${item.ean}</span>` : ''}
+                    <span class="sku-badge" style="background-color: var(--primary-glow); color: var(--primary); font-family: monospace; font-weight: 700; padding: 4px 8px; border-radius: 6px; font-size: 12px; letter-spacing: 0.5px;">
+                        ${item.ean}
+                    </span>
+                    ${item.ean !== item.sku ? `<span class="sku-subtext" style="display:block; font-size:10px; color:var(--text-secondary); margin-top:4px; font-family:var(--font-primary);">SKU: ${item.sku}</span>` : ''}
                 </div>
             </td>
             <td class="text-center">
@@ -766,7 +768,7 @@ function resetState() {
     elements.readerCard.style.display = 'none';
     elements.readerCard.classList.add('disabled-card');
     elements.barcodeInput.disabled = true;
-    elements.barcodeInput.placeholder = 'Aguardando leitura de SKU...';
+    elements.barcodeInput.placeholder = 'Aguardando leitura de EAN...';
     elements.btnSubmitSku.disabled = true;
     elements.btnCameraScan.disabled = true;
     

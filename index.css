@@ -1193,7 +1193,7 @@ body.light-mode .sku-badge {
     }
 
     .items-table td:nth-child(4)::before {
-        content: 'SKU:';
+        content: 'EAN:';
         font-size: 11px;
         text-transform: uppercase;
         color: var(--text-muted);
