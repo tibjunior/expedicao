@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expedição Inteligente de Vendas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="index.css">
+    <!-- PDF.js da Mozilla para leitura de PDF no cliente -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Html5-Qrcode para leitura de código de barras pela câmera -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body class="dark-mode">
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <span class="logo-icon"></span>
+                <h1>Expedição de Vendas</h1>
+            </div>
+            <div class="header-actions">
+                <button id="theme-toggle" class="btn btn-icon" title="Alternar Tema">
+                    <span class="icon">☀</span>
+                </button>
+                <button id="sound-toggle" class="btn btn-icon" title="Ativar/Desativar Som">
+                    <span class="icon">🔊</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Dashboard -->
+        <main class="app-main">
+            <!-- Coluna Esquerda: Controles de Importação e Leitura -->
+            <section class="control-column">
+                <!-- Painel de Importação -->
+                <div class="card glass-card shadow-lg" id="import-card">
+                    <h2 class="card-title">1. Carregar Lista de Vendas</h2>
+                    <p class="card-subtitle">Importe um PDF de separação de mercadorias</p>
+                    
+                    <div class="drag-drop-area" id="drop-area">
+                        <span class="upload-icon">📥</span>
+                        <p class="upload-text">Arraste o PDF aqui ou clique para selecionar</p>
+                        <input type="file" id="pdf-file-input" accept="application/pdf" style="display: none;">
+                    </div>
+                    
+                    <div class="divider">ou</div>
+                    
+                    <button id="load-test-pdf" class="btn btn-secondary w-full">
+                        ⚡ Carregar Modelo de Teste (teste.pdf)
+                    </button>
+                </div>
+
+                <!-- Painel de Leitor de SKU -->
+                <div class="card glass-card shadow-lg" id="reader-card" style="display: none;">
+                    <h2 class="card-title">2. Conferir Produto</h2>
+                    <p class="card-subtitle">Escaneie o código de barras (SKU) do produto</p>
+                    
+                    <form id="barcode-form" class="barcode-input-wrapper">
+                        <input type="text" id="barcode-input" placeholder="Aguardando leitura de SKU..." autocomplete="off" disabled>
+                        <button type="submit" class="btn btn-primary" id="btn-submit-sku" disabled>Conferir</button>
+                    </form>
+                    
+                    <div class="reader-options">
+                        <button id="btn-camera-scan" class="btn btn-outline w-full" disabled>
+                            📷 Escanear com Câmera
+                        </button>
+                        <div class="autofocus-indicator">
+                            <span class="pulse-dot"></span> Foco automático do leitor ativo
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Resumo e Progresso -->
+                <div class="card glass-card shadow-lg" id="progress-card" style="display: none;">
+                    <h2 class="card-title">Progresso Geral</h2>
+                    <div class="progress-details">
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="overall-progress-bar" style="width: 0%;"></div>
+                        </div>
+                        <div class="progress-text-row">
+                            <span id="progress-percentage">0%</span>
+                            <span id="progress-count">0 / 0 itens</span>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-val" id="stat-total-pedidos">0</span>
+                            <span class="stat-label">Pedidos</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-val" id="stat-total-pecas">0</span>
+                            <span class="stat-label">Peças Faltantes</span>
+                        </div>
+                    </div>
+
+                    <button id="btn-view-pdf" class="btn btn-secondary w-full mt-4">
+                        📄 Visualizar PDF Original
+                    </button>
+                    <button id="btn-reset" class="btn btn-danger-outline w-full mt-2">
+                        🗑 Limpar Expedição Atual
+                    </button>
+                </div>
+            </section>
+
+            <!-- Coluna Direita: Fila de Itens e Histórico -->
+            <section class="list-column" id="list-column" style="display: none;">
+                <!-- Lista de Itens -->
+                <div class="card glass-card shadow-lg flex-1 flex flex-col" id="items-card">
+                    <div class="card-header-row">
+                        <h2 class="card-title">Itens em Espera (Fila de Expedição)</h2>
+                        <div class="filter-group">
+                            <button class="btn btn-tab active" data-filter="all">Todos</button>
+                            <button class="btn btn-tab" data-filter="pending">Pendentes</button>
+                            <button class="btn btn-tab" data-filter="completed">Expedidos</button>
+                        </div>
+                    </div>
+                    
+                    <div class="search-box-wrapper">
+                        <input type="text" id="search-input" placeholder="Buscar por SKU, descrição ou cliente..." autocomplete="off">
+                    </div>
+
+                    <!-- Fila Vazia -->
+                    <div class="empty-state" id="empty-state">
+                        <span class="empty-icon">📋</span>
+                        <h3>Nenhuma lista carregada</h3>
+                        <p>Importe o PDF de separação ou clique em "Carregar Modelo de Teste" para começar.</p>
+                    </div>
+
+                    <!-- Tabela de Itens (Oculta por padrão) -->
+                    <div class="table-container scrollable" id="table-container" style="display: none;">
+                        <table class="items-table">
+                            <thead>
+                                <tr>
+                                    <th>Status</th>
+                                    <th>Nota / Cliente</th>
+                                    <th>Produto / Descrição</th>
+                                    <th>SKU</th>
+                                    <th class="text-center">Restante / Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="items-table-body">
+                                <!-- Preenchido dinamicamente via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Toast de Feedback Rápido (Notificação flutuante) -->
+        <div id="toast" class="toast">
+            <span class="toast-icon"></span>
+            <div class="toast-content">
+                <span class="toast-title"></span>
+                <span class="toast-desc"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scanner da Câmera (Inicialmente oculto, posicionado na raiz do body para sobreposição total) -->
+    <div id="camera-scanner-container">
+        <div id="camera-reader"></div>
+        <button id="btn-stop-camera" class="btn btn-danger w-full mt-3">Fechar Câmera</button>
+    </div>
+
+    <!-- Scripts da aplicação -->
+    <script src="pdf-parser.js?v=2"></script>
+    <script src="app.js?v=2"></script>
+</body>
+</html>
