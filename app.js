@@ -349,12 +349,15 @@ function onDataLoaded() {
 function processBarcodeRead(rawSku) {
     const sku = rawSku.trim().toUpperCase();
     
-    // Procurar por itens pendentes com este SKU
+    // Procurar por itens pendentes com este SKU ou EAN
     // (Pode ser correspondência exata de SKU ou de EAN-13/GTIN)
-    // O PDF contém SKUs como 'HY300-G' e GTINs como '7896630341155'
     let matchedItem = state.items.find(item => 
         !item.expedido && 
-        (item.sku.toUpperCase() === sku || item.sku.replace(/[^A-Z0-9]/g, '') === sku.replace(/[^A-Z0-9]/g, ''))
+        (
+            item.sku.toUpperCase() === sku || 
+            item.sku.replace(/[^A-Z0-9]/g, '') === sku.replace(/[^A-Z0-9]/g, '') ||
+            (item.ean && (item.ean.toUpperCase() === sku || item.ean.replace(/[^0-9]/g, '') === sku.replace(/[^0-9]/g, '')))
+        )
     );
     
     if (matchedItem) {
@@ -398,7 +401,11 @@ function processBarcodeRead(rawSku) {
         // Pode ser que já tenha sido totalmente expedido ou não exista no PDF
         const alreadyExpedidos = state.items.filter(item => 
             item.expedido && 
-            (item.sku.toUpperCase() === sku || item.sku.replace(/[^A-Z0-9]/g, '') === sku.replace(/[^A-Z0-9]/g, ''))
+            (
+                item.sku.toUpperCase() === sku || 
+                item.sku.replace(/[^A-Z0-9]/g, '') === sku.replace(/[^A-Z0-9]/g, '') ||
+                (item.ean && (item.ean.toUpperCase() === sku || item.ean.replace(/[^0-9]/g, '') === sku.replace(/[^0-9]/g, '')))
+            )
         );
         
         // Feedback visual de erro no input
@@ -408,9 +415,9 @@ function processBarcodeRead(rawSku) {
         playBeep(250, 300, 'sawtooth');
         
         if (alreadyExpedidos.length > 0) {
-            showToast('Produto Já Expedido', `O SKU "${sku}" já foi totalmente expedido nesta lista.`, 'error');
+            showToast('Produto Já Expedido', `O código "${sku}" já foi totalmente expedido nesta lista.`, 'error');
         } else {
-            showToast('SKU Não Encontrado', `O SKU "${sku}" não pertence a esta lista de expedição.`, 'error');
+            showToast('Código Não Encontrado', `O código "${sku}" não pertence a esta lista de expedição.`, 'error');
         }
     }
 }
@@ -536,10 +543,11 @@ function renderTable() {
         // Filtro de pesquisa por texto
         if (searchVal) {
             const matchesSku = item.sku.toLowerCase().includes(searchVal);
+            const matchesEan = item.ean ? item.ean.toLowerCase().includes(searchVal) : false;
             const matchesDesc = item.descricao.toLowerCase().includes(searchVal);
             const matchesCliente = item.cliente.toLowerCase().includes(searchVal);
             const matchesNota = item.nota.toLowerCase().includes(searchVal);
-            return matchesSku || matchesDesc || matchesCliente || matchesNota;
+            return matchesSku || matchesEan || matchesDesc || matchesCliente || matchesNota;
         }
         
         return true;
@@ -592,7 +600,10 @@ function renderTable() {
                 </div>
             </td>
             <td>
-                <span class="sku-badge">${item.sku}</span>
+                <div class="sku-cell">
+                    <span class="sku-badge">${item.sku}</span>
+                    ${item.ean && item.ean !== item.sku ? `<span class="ean-subtext" style="display:block; font-size:10px; color:var(--text-secondary); margin-top:4px; font-family:monospace; background:rgba(255,255,255,0.05); padding:2px 4px; border-radius:4px; width:fit-content;">EAN: ${item.ean}</span>` : ''}
+                </div>
             </td>
             <td class="text-center">
                 <span class="qty-display">

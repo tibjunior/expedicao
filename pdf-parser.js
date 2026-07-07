@@ -183,39 +183,66 @@ class PdfParser {
                 const quantidade = parseFloat(qtdStr.replace(',', '.'));
                 const cleanLine = line.replace(qtyRegex, '').trim();
                 
-                const tabs = cleanLine.split('\t').map(p => p.trim()).filter(Boolean);
-                let descricao = '';
+                let ean = '';
                 let sku = '';
+                let descricao = '';
                 
-                if (tabs.length >= 2) {
-                    // Caso 1: Nome do produto e SKU na mesma linha separados por tabs
-                    descricao = tabs[0];
-                    sku = tabs[1];
-                } else if (tabs.length === 1) {
-                    // Caso 2: Linha atual só tem o SKU/GTIN + quantidade, e o nome está na linha anterior
-                    const prevLine = i > 0 ? lines[i - 1] : '';
+                // Se a linha atual (sem a quantidade) contém apenas dígitos (ex: EAN de 8 a 14 dígitos)
+                if (/^\d{8,14}$/.test(cleanLine)) {
+                    ean = cleanLine;
                     
-                    const prevIsHeader = prevLine.startsWith('Produto') && prevLine.includes('SKU/GTIN');
-                    const prevIsNota = prevLine.startsWith('Nota');
-                    const prevIsCanal = prevLine.startsWith(ICON_CANAL) || prevLine.includes(ICON_CANAL);
+                    // O SKU e a descrição devem estar nas linhas anteriores
+                    const prevLine = i > 0 ? lines[i - 1].trim() : '';
+                    const prevPrevLine = i > 1 ? lines[i - 2].trim() : '';
                     
-                    if (prevLine && !prevIsHeader && !prevIsNota && !prevIsCanal) {
-                        descricao = prevLine;
-                        sku = tabs[0];
+                    // Se a linha imediatamente anterior for muito curta (ex: SKU isolado como '4275' ou 'AX900')
+                    const isPrevShort = prevLine.length > 0 && prevLine.length < 25 && !prevLine.includes('\t');
+                    
+                    if (isPrevShort && prevPrevLine && !prevPrevLine.startsWith('Nota') && !prevPrevLine.includes('Produto')) {
+                        sku = prevLine;
+                        descricao = prevPrevLine;
+                        
+                        // Limpa o SKU do final da descrição se estiver duplicado
+                        if (descricao.endsWith(sku)) {
+                            descricao = descricao.substring(0, descricao.length - sku.length).trim();
+                        }
+                    } else if (prevLine) {
+                        // Linha anterior longa contendo descrição + SKU conjugados
+                        const prevTabs = prevLine.split('\t').map(p => p.trim()).filter(Boolean);
+                        if (prevTabs.length >= 2) {
+                            descricao = prevTabs[0];
+                            sku = prevTabs[1];
+                        } else {
+                            const prevSpaces = prevLine.split(/\s+/);
+                            if (prevSpaces.length >= 2) {
+                                sku = prevSpaces[prevSpaces.length - 1];
+                                descricao = prevSpaces.slice(0, -1).join(' ');
+                            } else {
+                                sku = prevLine;
+                                descricao = prevLine;
+                            }
+                        }
                     } else {
-                        sku = tabs[0];
-                        descricao = tabs[0];
+                        sku = ean;
+                        descricao = 'Produto Sem Descrição';
                     }
                 } else {
-                    // Caso 3: Sem tabs estruturados, tenta quebrar por espaços
-                    const spaces = cleanLine.split(/\s+/);
-                    if (spaces.length >= 2) {
-                        sku = spaces[spaces.length - 1];
-                        descricao = spaces.slice(0, -1).join(' ');
+                    // Linha única (sem EAN numérico separado)
+                    const tabs = cleanLine.split('\t').map(p => p.trim()).filter(Boolean);
+                    if (tabs.length >= 2) {
+                        descricao = tabs[0];
+                        sku = tabs[1];
                     } else {
-                        sku = cleanLine;
-                        descricao = cleanLine;
+                        const spaces = cleanLine.split(/\s+/);
+                        if (spaces.length >= 2) {
+                            sku = spaces[spaces.length - 1];
+                            descricao = spaces.slice(0, -1).join(' ');
+                        } else {
+                            sku = cleanLine;
+                            descricao = cleanLine;
+                        }
                     }
+                    ean = sku; // Sem EAN separado, o buscador assume o SKU
                 }
                 
                 items.push({
@@ -224,8 +251,9 @@ class PdfParser {
                     ec: currentEc || 'Sem Pedido',
                     cliente: currentCliente || 'Desconhecido',
                     canal: currentCanal || 'Outros',
-                    descricao: descricao,
+                    descricao: descricao.trim(),
                     sku: sku.trim(),
+                    ean: ean.trim(),
                     quantidade: quantidade,
                     quantidadeOriginal: quantidade, // Mantém para progresso
                     expedido: false
