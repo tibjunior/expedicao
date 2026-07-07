@@ -7,6 +7,13 @@ const PORT = 8080;
 const server = http.createServer((req, res) => {
     // Decodifica a URL para lidar com espaços e acentos
     let decodedUrl = decodeURIComponent(req.url);
+    
+    // Remove qualquer query string (ex: ?v=2) da URL antes de ler o arquivo
+    const queryIndex = decodedUrl.indexOf('?');
+    if (queryIndex !== -1) {
+        decodedUrl = decodedUrl.substring(0, queryIndex);
+    }
+    
     let filePath = path.join(__dirname, decodedUrl);
     
     // Se for a raiz, serve o index.html
