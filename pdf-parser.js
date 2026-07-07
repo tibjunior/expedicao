@@ -198,8 +198,10 @@ class PdfParser {
                     temEan = true;
                     
                     // O SKU e a descrição devem estar nas linhas anteriores
-                    const prevLine = i > 0 ? lines[i - 1].trim() : '';
-                    const prevPrevLine = i > 1 ? lines[i - 2].trim() : '';
+                    const prevLineObj = i > 0 ? lines[i - 1] : null;
+                    const prevLine = prevLineObj ? prevLineObj.text.trim() : '';
+                    const prevPrevLineObj = i > 1 ? lines[i - 2] : null;
+                    const prevPrevLine = prevPrevLineObj ? prevPrevLineObj.text.trim() : '';
                     
                     // Se a linha imediatamente anterior for muito curta (ex: SKU isolado como '4275' ou 'AX900')
                     const isPrevShort = prevLine.length > 0 && prevLine.length < 25 && !prevLine.includes('\t');
