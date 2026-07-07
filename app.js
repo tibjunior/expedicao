@@ -591,11 +591,22 @@ function renderTable() {
                 </div>
             </td>
             <td>
-                <div class="product-cell">
-                    <span class="product-desc">${item.descricao}</span>
-                    <div class="product-details-extra">
-                        <span class="badge badge-channel ${canalClass}">${item.canal}</span>
-                        ${item.ec ? `<span>Pedido: ${item.ec}</span>` : ''}
+                <div class="product-cell" style="display: flex; align-items: center; gap: 12px;">
+                    ${item.imagem ? `
+                        <div class="product-image-wrapper" style="width: 50px; height: 50px; border-radius: 8px; overflow: hidden; border: 1.5px solid var(--border-color); background: rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+                            <img src="${item.imagem}" alt="${item.descricao}" style="width: 100%; height: 100%; object-fit: cover;">
+                        </div>
+                    ` : `
+                        <div class="product-image-wrapper placeholder" style="width: 50px; height: 50px; border-radius: 8px; overflow: hidden; border: 1.5px solid var(--border-color); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); font-size: 20px;">
+                            📦
+                        </div>
+                    `}
+                    <div class="product-info" style="display: flex; flex-direction: column; gap: 4px;">
+                        <span class="product-desc" style="font-weight: 600; font-size: 13.5px; color: var(--text-primary); line-height: 1.3;">${item.descricao}</span>
+                        <div class="product-details-extra" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <span class="badge badge-channel ${canalClass}">${item.canal}</span>
+                            ${item.ec ? `<span>Pedido: ${item.ec}</span>` : ''}
+                        </div>
                     </div>
                 </div>
             </td>

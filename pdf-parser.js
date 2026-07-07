@@ -1,6 +1,7 @@
 /**
  * Módulo de extração e parsing de PDF para a fila de expedição.
  * Utiliza o PDF.js (Mozilla) carregado no navegador.
+ * Extrai textos e imagens (fotos dos produtos) correlacionando-as por coordenada vertical Y.
  */
 class PdfParser {
     constructor() {
@@ -14,9 +15,9 @@ class PdfParser {
     }
 
     /**
-     * Carrega o ArrayBuffer de um PDF e extrai todos os itens.
+     * Carrega o ArrayBuffer de um PDF, extrai todos os itens e suas respectivas fotos.
      * @param {ArrayBuffer} arrayBuffer 
-     * @returns {Promise<Array>} Lista de itens extraídos
+     * @returns {Promise<Array>} Lista de itens extraídos com imagens em Base64
      */
     async parse(arrayBuffer) {
         if (!this.pdfjsLib) {
@@ -25,16 +26,38 @@ class PdfParser {
 
         try {
             const pdf = await this.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            let fullText = '';
+            const allItems = [];
             
-            // Extrair o texto de todas as páginas mantendo a organização de linhas
+            // Estado do cabeçalho da Nota que persiste entre as páginas do PDF
+            const currentHeader = {
+                nota: null,
+                ec: null,
+                cliente: null,
+                canal: null
+            };
+
+            // Processar página por página para manter as imagens alinhadas corretamente com os produtos
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
-                const pageText = await this.getPageTextByLayout(page);
-                fullText += pageText + '\n';
+                
+                // 1. Extrai o texto estruturado com coordenada Y
+                const pageTextLines = await this.getPageTextLinesWithY(page);
+                
+                // 2. Extrai metadados e IDs das imagens da página com suas coordenadas Y
+                const pageImages = await this.getPageImages(page);
+                
+                // 3. Converte os dados de texto e associa à foto mais próxima na mesma página
+                const pageItems = await this.parsePageLinesToItems(pageTextLines, pageImages, page, currentHeader);
+                
+                allItems.push(...pageItems);
             }
 
-            return this.parseTextToItems(fullText);
+            // Recalcula os IDs para ficarem sequenciais e contínuos de 1 a N
+            allItems.forEach((item, index) => {
+                item.id = index + 1;
+            });
+
+            return allItems;
         } catch (error) {
             console.error('Erro no parsing do PDF:', error);
             throw new Error('Falha ao processar o PDF. Certifique-se de que é um documento válido.');
@@ -42,21 +65,19 @@ class PdfParser {
     }
 
     /**
-     * Reconstrói as linhas de texto da página com base na sua posição Y e X na tela.
-     * Isso é essencial para que o layout tabular do PDF de expedição seja mantido.
+     * Extrai as linhas de texto da página, mantendo a coordenada Y de cada linha.
      * @param {Object} page Objeto da página do PDF.js
-     * @returns {Promise<string>} Texto formatado por linhas
+     * @returns {Promise<Array>} Lista de objetos contendo texto e coordenada Y
      */
-    async getPageTextByLayout(page) {
+    async getPageTextLinesWithY(page) {
         const textContent = await page.getTextContent();
         const items = textContent.items;
         
         // Agrupar itens por coordenada Y (linhas)
-        // O transform[5] indica a posição Y no PDF.js (de baixo para cima)
         const linesMap = {};
         for (const item of items) {
             if (!item.str.trim()) continue;
-            // Arredonda para 1 casa decimal para agrupar pequenos desvios de linha
+            // Arredonda a coordenada Y para agrupar pequenos desalinhamentos
             const y = Math.round(item.transform[5] * 10) / 10;
             if (!linesMap[y]) {
                 linesMap[y] = [];
@@ -64,7 +85,7 @@ class PdfParser {
             linesMap[y].push(item);
         }
         
-        // Ordena as chaves Y do topo para a base (valores Y maiores estão no topo da página)
+        // Ordena as linhas do topo para a base (coordenada Y maior fica no topo)
         const sortedY = Object.keys(linesMap).map(Number).sort((a, b) => b - a);
         
         const lines = [];
@@ -80,7 +101,7 @@ class PdfParser {
                     const prevXEnd = prevItem.transform[4] + prevItem.width;
                     const distance = item.transform[4] - prevXEnd;
                     
-                    // Se houver um espaçamento horizontal grande entre textos, insere uma tabulação (comportamento de coluna)
+                    // Insere tabulações em colunas separadas
                     if (distance > 15) {
                         lineText += '\t';
                     } else if (distance > 2) {
@@ -89,33 +110,155 @@ class PdfParser {
                 }
                 lineText += item.str;
             }
-            lines.push(lineText);
+            lines.push({ text: lineText, y: y });
         }
-        return lines.join('\n');
+        return lines;
     }
 
     /**
-     * Converte o texto estruturado em objetos de itens limpos.
-     * @param {string} text Texto completo extraído das páginas
-     * @returns {Array} Lista de itens de expedição
+     * Localiza todas as imagens desenhadas na página e suas coordenadas Y.
+     * @param {Object} page Objeto da página do PDF.js
+     * @returns {Promise<Array>} Lista de metadados das imagens na página
      */
-    parseTextToItems(text) {
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
-        let currentNota = null;
-        let currentEc = null;
-        let currentCliente = null;
-        let currentCanal = null;
-        const items = [];
+    async getPageImages(page) {
+        const images = [];
+        try {
+            const operatorList = await page.getOperatorList();
+            const fnArray = operatorList.fnArray;
+            const argsArray = operatorList.argsArray;
+            
+            let lastY = 0;
+            
+            for (let j = 0; j < fnArray.length; j++) {
+                const fn = fnArray[j];
+                
+                // Monitora a matriz de transformação do elemento gráfico
+                if (fn === this.pdfjsLib.OPS.transform) {
+                    const args = argsArray[j];
+                    if (args && args.length >= 6) {
+                        lastY = args[5]; // Posição vertical Y da transformação gráfica
+                    }
+                } 
+                // Captura a renderização da imagem
+                else if (fn === this.pdfjsLib.OPS.paintImageXObject || fn === this.pdfjsLib.OPS.paintInlineImageXObject) {
+                    const args = argsArray[j];
+                    if (args && args.length > 0) {
+                        const imgKey = args[0];
+                        images.push({ key: imgKey, y: lastY });
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Erro ao ler operadores de imagem da página:', err);
+        }
+        return images;
+    }
 
-        // Ícones em unicode conhecidos do PDF
-        const ICON_CANAL = '\uf0d1'; // Ícone do caminhão
-        const ICON_CLIENTE = '\uf606'; // Ícone de sorriso
-        const ICON_CHECKBOX = '\uf0c8'; // Checkbox vazio
+    /**
+     * Obtém uma imagem da página do PDF, desenha-a em um canvas e a converte para uma miniatura em Base64.
+     * @param {Object} page Objeto da página do PDF.js
+     * @param {string} imgKey Chave identificadora da imagem na página
+     * @returns {Promise<string|null>} String Base64 formatada em JPEG de tamanho reduzido (miniatura)
+     */
+    convertPdfImageToBase64(page, imgKey) {
+        return new Promise((resolve) => {
+            try {
+                // Solicita a imagem do cache de objetos da página
+                page.objs.get(imgKey, (imgObj) => {
+                    if (!imgObj) {
+                        resolve(null);
+                        return;
+                    }
+                    
+                    const width = imgObj.width;
+                    const height = imgObj.height;
+                    const data = imgObj.data; // Uint8ClampedArray contendo bytes de pixel RGBA/RGB
+                    
+                    if (!data || width <= 0 || height <= 0) {
+                        resolve(null);
+                        return;
+                    }
+                    
+                    // Cria canvas auxiliar
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Converte pixels brutos para o canvas dependendo do formato de bytes
+                    if (data.length === width * height * 4) {
+                        const imgData = new ImageData(data, width, height);
+                        ctx.putImageData(imgData, 0, 0);
+                    } else if (data.length === width * height * 3) {
+                        // Converte formato RGB para RGBA
+                        const imgData = ctx.createImageData(width, height);
+                        let j = 0;
+                        for (let i = 0; i < data.length; i += 3) {
+                            imgData.data[j] = data[i];
+                            imgData.data[j+1] = data[i+1];
+                            imgData.data[j+2] = data[i+2];
+                            imgData.data[j+3] = 255;
+                            j += 4;
+                        }
+                        ctx.putImageData(imgData, 0, 0);
+                    } else {
+                        resolve(null);
+                        return;
+                    }
+                    
+                    // OTIMIZAÇÃO CRÍTICA: Redimensiona para uma miniatura de no máximo 80px
+                    // Isso mantém as strings base64 leves e evita estourar o limite de 5MB do LocalStorage
+                    const thumbCanvas = document.createElement('canvas');
+                    const maxDim = 80;
+                    let thumbWidth = width;
+                    let thumbHeight = height;
+                    
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) {
+                            thumbWidth = maxDim;
+                            thumbHeight = Math.round((height * maxDim) / width);
+                        } else {
+                            thumbHeight = maxDim;
+                            thumbWidth = Math.round((width * maxDim) / height);
+                        }
+                    }
+                    
+                    thumbCanvas.width = thumbWidth;
+                    thumbCanvas.height = thumbHeight;
+                    const thumbCtx = thumbCanvas.getContext('2d');
+                    thumbCtx.drawImage(canvas, 0, 0, thumbWidth, thumbHeight);
+                    
+                    // Exporta em JPEG comprimido (qualidade 0.7) para economizar armazenamento
+                    const base64Url = thumbCanvas.toDataURL('image/jpeg', 0.7);
+                    resolve(base64Url);
+                });
+            } catch (err) {
+                console.error('Erro ao converter imagem do PDF:', err);
+                resolve(null);
+            }
+        });
+    }
+
+    /**
+     * Mapeia as linhas de texto da página e associa com as fotos de produto por proximidade de coordenada Y.
+     * @param {Array} lines Linhas de texto com Y
+     * @param {Array} pageImages Imagens com Y
+     * @param {Object} page Página PDFjs
+     * @param {Object} currentHeader Cabeçalho da nota
+     * @returns {Promise<Array>} Itens extraídos da página
+     */
+    async parsePageLinesToItems(lines, pageImages, page, currentHeader) {
+        const items = [];
+        const ICON_CANAL = '\uf0d1';
+        const ICON_CLIENTE = '\uf606';
+        const ICON_CHECKBOX = '\uf0c8';
 
         for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
+            const lineObj = lines[i];
+            const line = lineObj.text.trim();
+            const lineY = lineObj.y;
             
-            // Ignorar rodapés e cabeçalhos de página
+            // Ignorar elementos gerais
             if (line.includes('Separação de mercadorias') || 
                 (line.includes('--') && line.includes('of')) || 
                 line === ICON_CHECKBOX) {
@@ -125,19 +268,18 @@ class PdfParser {
             // Detectar início de Nota
             if (line.startsWith('Nota')) {
                 const notaMatch = line.match(/^Nota(\d+)/);
-                currentNota = notaMatch ? 'Nota' + notaMatch[1] : '';
+                currentHeader.nota = notaMatch ? 'Nota' + notaMatch[1] : '';
                 
                 const ecMatch = line.match(/Nº\s+EC\s+(\S+)/);
-                currentEc = ecMatch ? ecMatch[1] : '';
+                currentHeader.ec = ecMatch ? ecMatch[1] : '';
                 
                 const parts = line.split('\t').map(p => p.trim()).filter(Boolean);
                 let remainingParts = parts.filter(p => !p.startsWith('Nota') && !p.includes('Nº EC'));
                 
-                currentCliente = '';
-                currentCanal = '';
+                currentHeader.cliente = '';
+                currentHeader.canal = '';
                 
                 if (remainingParts.length > 0) {
-                    // Busca por canal conhecido na linha
                     const canalIndex = remainingParts.findIndex(p => 
                         p.startsWith(ICON_CANAL) || 
                         p.includes('Shopee') || 
@@ -146,36 +288,36 @@ class PdfParser {
                     );
                     
                     if (canalIndex !== -1) {
-                        currentCanal = remainingParts[canalIndex].replace(ICON_CANAL, '').trim();
+                        currentHeader.canal = remainingParts[canalIndex].replace(ICON_CANAL, '').trim();
                         remainingParts.splice(canalIndex, 1);
                     }
                     if (remainingParts.length > 0) {
-                        currentCliente = remainingParts.join(' ').replace(new RegExp(ICON_CLIENTE, 'g'), '').replace(/\s+/g, ' ').trim();
+                        currentHeader.cliente = remainingParts.join(' ').replace(new RegExp(ICON_CLIENTE, 'g'), '').replace(/\s+/g, ' ').trim();
                     }
                 }
                 continue;
             }
             
-            // Detectar linha secundária de Cliente/Canal (quando quebrada do cabeçalho da nota)
+            // Detectar canal e cliente secundários
             if (line.includes(ICON_CANAL)) {
                 const parts = line.split('\t').map(p => p.trim()).filter(Boolean);
                 const canalPart = parts.find(p => p.includes(ICON_CANAL));
                 if (canalPart) {
-                    currentCanal = canalPart.replace(ICON_CANAL, '').trim();
+                    currentHeader.canal = canalPart.replace(ICON_CANAL, '').trim();
                 }
                 const clientePart = parts.find(p => !p.includes(ICON_CANAL));
                 if (clientePart) {
-                    currentCliente = clientePart.replace(new RegExp(ICON_CLIENTE, 'g'), '').replace(/\s+/g, ' ').trim();
+                    currentHeader.cliente = clientePart.replace(new RegExp(ICON_CLIENTE, 'g'), '').replace(/\s+/g, ' ').trim();
                 }
                 continue;
             }
             
-            // Ignorar o cabeçalho de produtos
+            // Ignorar cabeçalho da tabela de produtos
             if (line.startsWith('Produto') && line.includes('SKU/GTIN')) {
                 continue;
             }
             
-            // Regex para capturar quantidades no final da linha (ex: 1,00 UN ou 2,00 Un)
+            // Regex para quantidades no final (ex: 1,00 UN)
             const qtyRegex = /(\d+,\d+)\s*(?:UN|Un|un|uN)$/;
             if (qtyRegex.test(line)) {
                 const match = line.match(qtyRegex);
@@ -187,27 +329,25 @@ class PdfParser {
                 let sku = '';
                 let descricao = '';
                 
-                // Se a linha atual (sem a quantidade) contém apenas dígitos (ex: EAN de 8 a 14 dígitos)
+                // Se a linha limpa contiver apenas dígitos (EAN)
                 if (/^\d{8,14}$/.test(cleanLine)) {
                     ean = cleanLine;
                     
-                    // O SKU e a descrição devem estar nas linhas anteriores
-                    const prevLine = i > 0 ? lines[i - 1].trim() : '';
-                    const prevPrevLine = i > 1 ? lines[i - 2].trim() : '';
+                    const prevLineObj = i > 0 ? lines[i - 1] : null;
+                    const prevLine = prevLineObj ? prevLineObj.text.trim() : '';
+                    const prevPrevLineObj = i > 1 ? lines[i - 2] : null;
+                    const prevPrevLine = prevPrevLineObj ? prevPrevLineObj.text.trim() : '';
                     
-                    // Se a linha imediatamente anterior for muito curta (ex: SKU isolado como '4275' ou 'AX900')
                     const isPrevShort = prevLine.length > 0 && prevLine.length < 25 && !prevLine.includes('\t');
                     
                     if (isPrevShort && prevPrevLine && !prevPrevLine.startsWith('Nota') && !prevPrevLine.includes('Produto')) {
                         sku = prevLine;
                         descricao = prevPrevLine;
                         
-                        // Limpa o SKU do final da descrição se estiver duplicado
                         if (descricao.endsWith(sku)) {
                             descricao = descricao.substring(0, descricao.length - sku.length).trim();
                         }
                     } else if (prevLine) {
-                        // Linha anterior longa contendo descrição + SKU conjugados
                         const prevTabs = prevLine.split('\t').map(p => p.trim()).filter(Boolean);
                         if (prevTabs.length >= 2) {
                             descricao = prevTabs[0];
@@ -242,25 +382,55 @@ class PdfParser {
                             descricao = cleanLine;
                         }
                     }
-                    ean = sku; // Sem EAN separado, o buscador assume o SKU
+                    ean = sku;
+                }
+                
+                // Mapear a imagem correspondente por coordenada Y
+                let matchedImageBase64 = null;
+                if (pageImages && pageImages.length > 0) {
+                    // Filtra imagens fora da zona do logotipo superior (Y < 780)
+                    const productImages = pageImages.filter(img => img.y < 780);
+                    
+                    if (productImages.length > 0) {
+                        let closestImg = null;
+                        let minDistance = Infinity;
+                        
+                        for (const img of productImages) {
+                            const dist = Math.abs(img.y - lineY);
+                            if (dist < minDistance && dist < 70) { // Tolerância de até 70 pontos
+                                minDistance = dist;
+                                closestImg = img;
+                            }
+                        }
+                        
+                        if (closestImg) {
+                            matchedImageBase64 = await this.convertPdfImageToBase64(page, closestImg.key);
+                            
+                            // Remove a imagem para evitar dupla associação
+                            const imgIdx = pageImages.findIndex(img => img.key === closestImg.key);
+                            if (imgIdx !== -1) {
+                                pageImages.splice(imgIdx, 1);
+                            }
+                        }
+                    }
                 }
                 
                 items.push({
-                    id: items.length + 1,
-                    nota: currentNota,
-                    ec: currentEc || 'Sem Pedido',
-                    cliente: currentCliente || 'Desconhecido',
-                    canal: currentCanal || 'Outros',
+                    id: 0, // Recalculado globalmente no final
+                    nota: currentHeader.nota,
+                    ec: currentHeader.ec || 'Sem Pedido',
+                    cliente: currentHeader.cliente || 'Desconhecido',
+                    canal: currentHeader.canal || 'Outros',
                     descricao: descricao.trim(),
                     sku: sku.trim(),
                     ean: ean.trim(),
+                    imagem: matchedImageBase64,
                     quantidade: quantidade,
-                    quantidadeOriginal: quantidade, // Mantém para progresso
+                    quantidadeOriginal: quantidade,
                     expedido: false
                 });
             }
         }
-        
         return items;
     }
 }
