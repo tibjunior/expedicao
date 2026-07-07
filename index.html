@@ -164,6 +164,17 @@
         <button id="btn-stop-camera" class="btn btn-danger w-full mt-3">Fechar Câmera</button>
     </div>
 
+    <!-- Modal de Alerta de Erro Persistente (Trava para confirmação de erros) -->
+    <div id="error-modal" style="display: none;">
+        <div class="error-modal-card">
+            <div class="error-modal-icon">⚠️</div>
+            <h2 id="error-modal-title">Código Não Encontrado</h2>
+            <p id="error-modal-desc">O código bipado não pertence a esta lista.</p>
+            <div class="error-modal-code" id="error-modal-code">7890000000000</div>
+            <button id="btn-close-error-modal" class="btn btn-danger">OK, ENTENDIDO (Enter)</button>
+        </div>
+    </div>
+
     <!-- Scripts da aplicação -->
     <script src="pdf-parser.js?v=2"></script>
     <script src="app.js?v=2"></script>

@@ -14,7 +14,8 @@ const state = {
     theme: 'dark', // 'dark', 'light'
     scannerActive: false,
     pdfBlob: null,
-    pdfName: null
+    pdfName: null,
+    errorModalActive: false
 };
 
 // Instância do Scanner de Câmera
@@ -52,6 +53,11 @@ function initElements() {
     elements.filterBtns = document.querySelectorAll('[data-filter]');
     elements.listColumn = document.getElementById('list-column');
     elements.btnViewPdf = document.getElementById('btn-view-pdf');
+    elements.errorModal = document.getElementById('error-modal');
+    elements.errorModalTitle = document.getElementById('error-modal-title');
+    elements.errorModalDesc = document.getElementById('error-modal-desc');
+    elements.errorModalCode = document.getElementById('error-modal-code');
+    elements.btnCloseErrorModal = document.getElementById('btn-close-error-modal');
 }
 
 // ==========================================
@@ -229,6 +235,21 @@ function initEventListeners() {
     if (elements.btnViewPdf) {
         elements.btnViewPdf.addEventListener('click', viewOriginalPdf);
     }
+
+    // Fechar modal de erro persistente
+    if (elements.btnCloseErrorModal) {
+        elements.btnCloseErrorModal.addEventListener('click', closeErrorModal);
+    }
+
+    // Atalhos de teclado globais (ex: Enter ou Espaço para fechar modal de erro)
+    document.addEventListener('keydown', (e) => {
+        if (state.errorModalActive) {
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+                e.preventDefault();
+                closeErrorModal();
+            }
+        }
+    });
 }
 
 // ==========================================
@@ -415,9 +436,9 @@ function processBarcodeRead(rawSku) {
         playBeep(250, 300, 'sawtooth');
         
         if (alreadyExpedidos.length > 0) {
-            showToast('Produto Já Expedido', `O código "${sku}" já foi totalmente expedido nesta lista.`, 'error');
+            showErrorModal('Produto Já Expedido', 'Este produto já foi totalmente processado e expedido nesta lista.', sku);
         } else {
-            showToast('Código Não Encontrado', `O código "${sku}" não pertence a esta lista de expedição.`, 'error');
+            showErrorModal('Código Não Encontrado', 'O código lido não foi encontrado na lista de pendentes.', sku);
         }
     }
 }
@@ -660,13 +681,18 @@ function startCameraScanner() {
         { facingMode: "environment" }, // Prioriza câmera traseira do celular
         config,
         (decodedText) => {
-            // Callback ao ler código com sucesso
+            if (state.errorModalActive) return;
+            
+            // Pausa a câmera no momento em que detecta um código
+            stopCameraScanner();
+            
             processBarcodeRead(decodedText);
             
-            // Pausa breve para evitar leituras duplicadas rápidas do mesmo código
-            stopCameraScanner();
+            // Se não disparou erro, re-inicia a câmera após 1.5s
             setTimeout(() => {
-                startCameraScanner();
+                if (!state.errorModalActive && elements.cameraScannerContainer.classList.contains('active')) {
+                    startCameraScanner();
+                }
             }, 1500);
         },
         (errorMessage) => {
@@ -790,4 +816,49 @@ async function viewOriginalPdf() {
     elements.importCard.style.display = 'block';
     elements.importCard.classList.remove('disabled-card');
     showToast('Área de Upload Liberada', 'Arraste o PDF de volta aqui se desejar habilitar a visualização.', 'success');
+}
+
+/**
+ * Exibe o modal de erro persistente e trava o leitor/câmera para confirmação.
+ */
+function showErrorModal(title, desc, code) {
+    state.errorModalActive = true;
+    
+    elements.errorModalTitle.textContent = title;
+    elements.errorModalDesc.textContent = desc;
+    elements.errorModalCode.textContent = code;
+    elements.errorModal.style.display = 'flex';
+    
+    // Desabilita input de SKU para evitar digitações paralelas
+    elements.barcodeInput.disabled = true;
+    
+    // Foca o botão de fechar para permitir a confirmação com Enter ou Espaço
+    setTimeout(() => {
+        if (elements.btnCloseErrorModal) {
+            elements.btnCloseErrorModal.focus();
+        }
+    }, 100);
+}
+
+/**
+ * Fecha o modal de erro persistente e reativa a câmera ou o input de leitura.
+ */
+function closeErrorModal() {
+    elements.errorModal.style.display = 'none';
+    state.errorModalActive = false;
+    
+    // Se o contêiner do scanner de câmera estiver aberto, significa que o operador estava usando a câmera.
+    // Então, re-iniciamos a câmera automaticamente!
+    if (elements.cameraScannerContainer && elements.cameraScannerContainer.classList.contains('active')) {
+        state.scannerActive = false;
+        startCameraScanner();
+    } else {
+        // Caso contrário, ele estava usando o leitor físico / teclado.
+        // Re-habilita e refoca o input de SKU
+        if (state.items.length > 0) {
+            elements.barcodeInput.disabled = false;
+            elements.barcodeInput.value = '';
+            elements.barcodeInput.focus();
+        }
+    }
 }

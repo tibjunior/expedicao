@@ -948,6 +948,99 @@ body.light-mode .sku-badge {
 }
 
 /* ==========================================
+   8.5. MODAL DE ERRO PERSISTENTE (TRAVA)
+   ========================================== */
+#error-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(15, 10, 10, 0.96); /* Fundo vermelho/escuro opaco */
+    z-index: 100000; /* Acima de toda a interface, inclusive da câmera */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    backdrop-filter: blur(12px);
+}
+
+.error-modal-card {
+    background: rgba(30, 20, 20, 0.95);
+    border: 2px solid #ef4444;
+    box-shadow: 0 0 50px rgba(239, 68, 68, 0.4);
+    border-radius: 20px;
+    padding: 32px 24px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    animation: modal-shake 0.5s ease-in-out;
+}
+
+.error-modal-icon {
+    font-size: 54px;
+    margin-bottom: 16px;
+    animation: pulse-icon 1.5s infinite;
+}
+
+.error-modal-card h2 {
+    color: #ef4444;
+    font-size: 22px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.error-modal-card p {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.error-modal-code {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px dashed rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+    font-family: monospace;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 10px 16px;
+    border-radius: 8px;
+    margin: 20px auto;
+    width: fit-content;
+    letter-spacing: 1px;
+}
+
+#btn-close-error-modal {
+    width: 100%;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    margin-top: 16px;
+    background-color: #ef4444;
+    border-color: #ef4444;
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3);
+}
+
+#btn-close-error-modal:hover {
+    background-color: #dc2626;
+    border-color: #dc2626;
+}
+
+@keyframes modal-shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+    20%, 40%, 60%, 80% { transform: translateX(8px); }
+}
+
+@keyframes pulse-icon {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.12); opacity: 0.85; }
+}
+
+/* ==========================================
    9. DESIGN RESPONSIVO PARA CELULAR (MOBILE)
    ========================================== */
 @media (max-width: 768px) {
