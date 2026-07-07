@@ -576,6 +576,7 @@ function renderTable() {
         const canalLower = item.canal.toLowerCase();
         if (canalLower.includes('shopee')) canalClass = 'shopee';
         else if (canalLower.includes('amazon')) canalClass = 'amazon';
+        else if (canalLower.includes('mercadolivre') || canalLower.includes('mercado livre')) canalClass = 'mercadolivre';
 
         // Linha da tabela
         tr.innerHTML = `

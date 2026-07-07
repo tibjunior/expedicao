@@ -746,6 +746,12 @@ body.light-mode .items-table tr:hover {
     color: var(--channel-amazon);
 }
 
+.badge-channel.mercadolivre {
+    background-color: #fff159;
+    border-color: #eed800;
+    color: #2d3277;
+}
+
 /* Coluna de Notas e Clientes */
 .meta-cell {
     display: flex;

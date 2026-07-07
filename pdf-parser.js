@@ -146,7 +146,9 @@ class PdfParser {
                     );
                     
                     if (canalIndex !== -1) {
-                        currentCanal = remainingParts[canalIndex].replace(ICON_CANAL, '').trim();
+                        let canalVal = remainingParts[canalIndex].replace(ICON_CANAL, '').trim();
+                        if (canalVal === 'Transportadora') canalVal = 'MercadoLivre';
+                        currentCanal = canalVal;
                         remainingParts.splice(canalIndex, 1);
                     }
                     if (remainingParts.length > 0) {
@@ -161,7 +163,9 @@ class PdfParser {
                 const parts = line.split('\t').map(p => p.trim()).filter(Boolean);
                 const canalPart = parts.find(p => p.includes(ICON_CANAL));
                 if (canalPart) {
-                    currentCanal = canalPart.replace(ICON_CANAL, '').trim();
+                    let canalVal = canalPart.replace(ICON_CANAL, '').trim();
+                    if (canalVal === 'Transportadora') canalVal = 'MercadoLivre';
+                    currentCanal = canalVal;
                 }
                 const clientePart = parts.find(p => !p.includes(ICON_CANAL));
                 if (clientePart) {
