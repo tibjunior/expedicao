@@ -517,10 +517,7 @@ function restoreStateFromStorage() {
 
 // Configura o foco inicial no campo de SKU
 function setupAutofocus() {
-    // Foca apenas uma única vez na abertura caso os dados já estejam carregados
-    if (state.items.length > 0 && !elements.barcodeInput.disabled) {
-        elements.barcodeInput.focus();
-    }
+    // Foco automático inicial desativado conforme solicitação do usuário
 }
 
 // ==========================================
@@ -871,8 +868,8 @@ function onDataLoaded() {
     renderTable();
     updateProgress();
     
-    // Foca no input
-    elements.barcodeInput.focus();
+    // Foca no input (Desativado conforme solicitação)
+    // elements.barcodeInput.focus();
 }
 
 // ==========================================
@@ -1443,11 +1440,9 @@ function stopCameraScanner() {
     if (html5QrcodeScanner) {
         html5QrcodeScanner.stop().then(() => {
             html5QrcodeScanner = null;
-            elements.barcodeInput.focus();
         }).catch(err => {
             console.error('Erro ao parar scanner:', err);
             html5QrcodeScanner = null;
-            elements.barcodeInput.focus();
         });
     }
 }
@@ -1587,7 +1582,6 @@ function closeErrorModal() {
         if (state.items.length > 0) {
             elements.barcodeInput.disabled = false;
             elements.barcodeInput.value = '';
-            elements.barcodeInput.focus();
         }
     }
 }
@@ -1701,7 +1695,6 @@ function restoreActiveScanner() {
         if (state.items.length > 0) {
             elements.barcodeInput.disabled = false;
             elements.barcodeInput.value = '';
-            elements.barcodeInput.focus();
         }
     }
 }
@@ -1968,8 +1961,7 @@ async function loadDespachanteData(id) {
         // Inicia sincronização automática em background
         startBackgroundSync();
         
-        // Foco automático
-        setTimeout(setupAutofocus, 100);
+        // Foco automático desativado conforme solicitação do usuário
     } catch (e) {
         console.error('Erro ao carregar dados do despachante:', e);
         showToast('Erro de Carregamento', 'Falha ao buscar registros do banco local.', 'error');
