@@ -1852,6 +1852,7 @@ function switchTab(tab, selectedId = null) {
         elements.tabContentAdministracao.classList.remove('active');
         
         loadDespachantesDropdown(selectedId);
+        startBackgroundSync();
     } else {
         elements.tabBtnExpedicao.classList.remove('active');
         elements.tabBtnAdministracao.classList.add('active');
@@ -1861,6 +1862,7 @@ function switchTab(tab, selectedId = null) {
         stopCameraScanner();
         renderLogs();
         renderDespachantesTable();
+        startBackgroundSync();
     }
 }
 
@@ -1993,12 +1995,11 @@ async function deleteActiveDespachante() {
 
 // Renderiza a tabela de listas de despacho ativas na aba do administrador
 let isRenderingDespachantesTable = false;
+let lastAdminDataHash = "";
 async function renderDespachantesTable() {
     if (!elements.despachantesTableBody) return;
     if (isRenderingDespachantesTable) return;
     isRenderingDespachantesTable = true;
-    
-    elements.despachantesTableBody.innerHTML = '';
     
     try {
         const despachantes = await db.getAllDespachantes();
@@ -2006,23 +2007,43 @@ async function renderDespachantesTable() {
         if (despachantes.length === 0) {
             elements.despachantesEmpty.style.display = 'block';
             elements.despachantesTableBody.closest('.table-container').style.display = 'none';
+            lastAdminDataHash = "";
             isRenderingDespachantesTable = false;
             return;
         }
         
-        elements.despachantesEmpty.style.display = 'none';
-        elements.despachantesTableBody.closest('.table-container').style.display = 'block';
+        // Coleta os metadados do progresso de cada despachante para criar um hash comparativo
+        const dataForHash = [];
+        const detailsMap = [];
         
         for (const d of despachantes) {
-            const tr = document.createElement('tr');
-            tr.style.borderBottom = '1px solid var(--border-color)';
-            
-            // Busca itens para saber quantidade
             const itens = await db.getItensByDespachante(d.id);
             const totalLinhas = itens.length;
             const pecasRestantes = itens.reduce((acc, it) => acc + it.quantidade, 0);
             const pecasTotais = itens.reduce((acc, it) => acc + it.quantidadeOriginal, 0);
             const pecasExpedidas = pecasTotais - pecasRestantes;
+            
+            dataForHash.push(`${d.id}-${d.nome}-${d.concluido}-${pecasExpedidas}/${pecasTotais}`);
+            detailsMap.push({ d, totalLinhas, pecasExpedidas, pecasTotais });
+        }
+        
+        const currentHash = dataForHash.join('|');
+        // Se as listas e o progresso continuam exatamente idênticos, pula a re-renderização do DOM
+        if (currentHash === lastAdminDataHash) {
+            isRenderingDespachantesTable = false;
+            updateAllTimers(); // Atualiza apenas os relógios dinâmicos
+            return;
+        }
+        
+        // Armazena o novo estado no cache e atualiza a interface
+        lastAdminDataHash = currentHash;
+        elements.despachantesTableBody.innerHTML = '';
+        elements.despachantesEmpty.style.display = 'none';
+        elements.despachantesTableBody.closest('.table-container').style.display = 'block';
+        
+        for (const { d, totalLinhas, pecasExpedidas, pecasTotais } of detailsMap) {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border-color)';
             
             // Formata datas
             const dateEntrada = new Date(d.data_criacao);
@@ -2034,9 +2055,9 @@ async function renderDespachantesTable() {
                 dateLimiteStr = `${dateLimite.toLocaleDateString('pt-BR')} ${dateLimite.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}`;
             }
             
-            // Ações dependendo do status de conclusão
+            // Ações dependendo do status de conclusão (concluido === 1)
             let acoesHtml = '';
-            if (d.concluido) {
+            if (d.concluido === 1) {
                 acoesHtml = `
                     <div style="display:flex; justify-content:center; gap: 6px;">
                         <button class="btn btn-outline" onclick="exportarCsvPeloPainel(${d.id})" style="padding: 4px 8px; font-size: 11px; height: auto;">CSV</button>
