@@ -816,13 +816,7 @@ async function handlePdfFile(file) {
                 
                 // Pergunta se deseja chavear para a aba de expedição
                 if (confirm(`Lista importada com sucesso para o despachante "${despachanteNome}". Deseja ir para a aba de Expedição de Vendas?`)) {
-                    switchTab('expedicao');
-                    
-                    // Seleciona automaticamente o despachante recém-criado
-                    setTimeout(() => {
-                        elements.activeDespachanteSelect.value = despachanteId;
-                        elements.activeDespachanteSelect.dispatchEvent(new Event('change'));
-                    }, 150);
+                    switchTab('expedicao', despachanteId);
                 } else {
                     renderLogs();
                 }
@@ -1854,7 +1848,7 @@ function exportLogsToCsv() {
 // ==========================================
 
 // Alterna entre as abas e atualiza a interface
-function switchTab(tab) {
+function switchTab(tab, selectedId = null) {
     state.activeTab = tab;
     localStorage.setItem('expedicao_active_tab', tab);
     
@@ -1864,7 +1858,7 @@ function switchTab(tab) {
         elements.tabContentExpedicao.classList.add('active');
         elements.tabContentAdministracao.classList.remove('active');
         
-        loadDespachantesDropdown();
+        loadDespachantesDropdown(selectedId);
     } else {
         elements.tabBtnExpedicao.classList.remove('active');
         elements.tabBtnAdministracao.classList.add('active');
@@ -1898,10 +1892,7 @@ async function loadDespachantesDropdown(selectedId = null) {
         const idToSet = selectedId || state.activeDespachanteId || parseInt(localStorage.getItem('expedicao_active_despachante_id'), 10);
         if (idToSet && despachantes.some(d => d.id === idToSet)) {
             elements.activeDespachanteSelect.value = idToSet;
-            if (!selectedId) {
-                // Carrega os dados silenciosamente
-                loadDespachanteData(idToSet);
-            }
+            loadDespachanteData(idToSet);
         } else if (!despachantes.some(d => d.id === state.activeDespachanteId)) {
             // Se o despachante ativo sumiu ou foi apagado
             loadDespachanteData(null);
