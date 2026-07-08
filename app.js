@@ -55,13 +55,14 @@ class ExpedicaoDB {
         });
     }
 
-    addDespachante(nome) {
+    addDespachante(nome, dataLimite) {
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['despachantes'], 'readwrite');
             const store = transaction.objectStore('despachantes');
             const despachante = {
                 nome: nome,
                 data_criacao: new Date().toISOString(),
+                data_limite: dataLimite || '',
                 concluido: false
             };
             const request = store.add(despachante);
@@ -86,6 +87,20 @@ class ExpedicaoDB {
             const store = transaction.objectStore('despachantes');
             const index = store.index('concluido');
             const request = index.getAll(false);
+            request.onsuccess = (e) => {
+                const list = e.target.result || [];
+                list.sort((a,b) => new Date(b.data_criacao) - new Date(a.data_criacao));
+                resolve(list);
+            };
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    getAllDespachantes() {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['despachantes'], 'readonly');
+            const store = transaction.objectStore('despachantes');
+            const request = store.getAll();
             request.onsuccess = (e) => {
                 const list = e.target.result || [];
                 list.sort((a,b) => new Date(b.data_criacao) - new Date(a.data_criacao));
@@ -306,8 +321,9 @@ function initElements() {
     elements.activeDespachanteSelect = document.getElementById('active-despachante-select');
     elements.despachanteStatusInfo = document.getElementById('despachante-status-info');
 
-    // Input de Despachante (Aba Administração)
+    // Input de Despachante e Prazo Limite (Aba Administração)
     elements.despachanteNameInput = document.getElementById('despachante-name-input');
+    elements.despachanteDeadlineInput = document.getElementById('despachante-deadline-input');
     elements.btnLoadTest = document.getElementById('btn-load-test');
 
     // Logs de Auditoria
@@ -317,6 +333,10 @@ function initElements() {
     elements.btnClearLogs = document.getElementById('btn-clear-logs');
     elements.logsTableBody = document.getElementById('logs-table-body');
     elements.logsEmpty = document.getElementById('logs-empty');
+
+    // Painel de Listas de Despacho Ativas (Aba Administração)
+    elements.despachantesTableBody = document.getElementById('despachantes-table-body');
+    elements.despachantesEmpty = document.getElementById('despachantes-empty');
 }
 
 // ==========================================
@@ -330,6 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initEventListeners();
         restoreStateFromStorage();
         setupAutofocus();
+        renderDespachantesTable();
     }).catch(err => {
         console.error('Falha critica ao iniciar banco de dados IndexedDB:', err);
         showToast('Erro de Inicialização', 'O banco de dados do armazém falhou ao abrir.', 'error');
@@ -431,26 +452,36 @@ function initEventListeners() {
         });
     }
 
-    // Monitora nome do despachante para habilitar área de upload
+    // Monitora nome do despachante e prazo limite para habilitar área de upload
+    function validateImportForm() {
+        const nomeVal = elements.despachanteNameInput.value.trim();
+        const deadlineVal = elements.despachanteDeadlineInput.value;
+        const hasName = nomeVal.length >= 2;
+        const hasDeadline = deadlineVal !== '';
+        
+        if (hasName && hasDeadline) {
+            elements.dropArea.classList.remove('disabled-card');
+            elements.dropArea.style.opacity = '1';
+            elements.dropArea.style.pointerEvents = 'auto';
+            elements.dropArea.querySelector('.upload-text').textContent = 'Arraste o PDF de vendas aqui ou clique para selecionar';
+            elements.fileInput.disabled = false;
+            elements.btnLoadTest.disabled = false;
+        } else {
+            elements.dropArea.classList.add('disabled-card');
+            elements.dropArea.style.opacity = '0.5';
+            elements.dropArea.style.pointerEvents = 'none';
+            elements.dropArea.querySelector('.upload-text').textContent = 'Preencha o despachante e o prazo limite para liberar';
+            elements.fileInput.disabled = true;
+            elements.btnLoadTest.disabled = true;
+        }
+    }
+
     if (elements.despachanteNameInput) {
-        elements.despachanteNameInput.addEventListener('input', (e) => {
-            const val = e.target.value.trim();
-            const hasName = val.length >= 2;
-            
-            if (hasName) {
-                elements.dropArea.classList.remove('disabled-card');
-                elements.dropArea.style.opacity = '1';
-                elements.dropArea.style.pointerEvents = 'auto';
-                elements.fileInput.disabled = false;
-                elements.btnLoadTest.disabled = false;
-            } else {
-                elements.dropArea.classList.add('disabled-card');
-                elements.dropArea.style.opacity = '0.5';
-                elements.dropArea.style.pointerEvents = 'none';
-                elements.fileInput.disabled = true;
-                elements.btnLoadTest.disabled = true;
-            }
-        });
+        elements.despachanteNameInput.addEventListener('input', validateImportForm);
+    }
+    if (elements.despachanteDeadlineInput) {
+        elements.despachanteDeadlineInput.addEventListener('input', validateImportForm);
+        elements.despachanteDeadlineInput.addEventListener('change', validateImportForm);
     }
 
     // Seleção de Despachante Ativo no Dropdown
@@ -610,8 +641,14 @@ async function loadLocalTestPdf() {
 // Processa o arquivo PDF carregado e vincula ao despachante no banco de dados
 async function handlePdfFile(file) {
     const despachanteNome = elements.despachanteNameInput.value.trim();
+    const despachanteDeadline = elements.despachanteDeadlineInput.value;
+    
     if (!despachanteNome) {
         showToast('Despachante Requerido', 'Por favor, insira o nome do despachante responsável.', 'error');
+        return;
+    }
+    if (!despachanteDeadline) {
+        showToast('Prazo Requerido', 'Por favor, defina o horário limite de expedição.', 'error');
         return;
     }
 
@@ -628,8 +665,8 @@ async function handlePdfFile(file) {
                     return;
                 }
                 
-                // Cria despachante no IndexedDB
-                const despachanteId = await db.addDespachante(despachanteNome);
+                // Cria despachante no IndexedDB com o prazo limite
+                const despachanteId = await db.addDespachante(despachanteNome, despachanteDeadline);
                 
                 // Vincula os itens do PDF a esse despachante
                 await db.saveItens(parsedItems, despachanteId);
@@ -650,9 +687,13 @@ async function handlePdfFile(file) {
                 playSoundEffect('confirm');
                 showToast('Importado com Sucesso', `${parsedItems.length} itens vinculados ao despachante: ${despachanteNome}`, 'success');
                 
-                // Limpa o input do despachante e dispara evento para desabilitar o upload
+                // Limpa os inputs e desativa o drag-drop
                 elements.despachanteNameInput.value = '';
+                elements.despachanteDeadlineInput.value = '';
                 elements.despachanteNameInput.dispatchEvent(new Event('input'));
+                
+                // Recarrega a tabela de listas de despacho ativas
+                renderDespachantesTable();
                 
                 // Pergunta se deseja chavear para a aba de expedição
                 if (confirm(`Lista importada com sucesso para o despachante "${despachanteNome}". Deseja ir para a aba de Expedição de Vendas?`)) {
@@ -1710,6 +1751,7 @@ function switchTab(tab) {
         
         stopCameraScanner();
         renderLogs();
+        renderDespachantesTable();
     }
 }
 
@@ -1827,3 +1869,203 @@ async function deleteActiveDespachante() {
         showToast('Erro ao Excluir', 'Não foi possível apagar os dados do banco local.', 'error');
     }
 }
+
+// ==========================================
+// 8.11. PAINEL GERENCIAL DE DESPACHANTES
+// ==========================================
+
+// Renderiza a tabela de listas de despacho ativas na aba do administrador
+async function renderDespachantesTable() {
+    if (!elements.despachantesTableBody) return;
+    
+    elements.despachantesTableBody.innerHTML = '';
+    
+    try {
+        const despachantes = await db.getAllDespachantes();
+        
+        if (despachantes.length === 0) {
+            elements.despachantesEmpty.style.display = 'block';
+            elements.despachantesTableBody.closest('.table-container').style.display = 'none';
+            return;
+        }
+        
+        elements.despachantesEmpty.style.display = 'none';
+        elements.despachantesTableBody.closest('.table-container').style.display = 'block';
+        
+        for (const d of despachantes) {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border-color)';
+            
+            // Busca itens para saber quantidade
+            const itens = await db.getItensByDespachante(d.id);
+            const totalLinhas = itens.length;
+            const pecasRestantes = itens.reduce((acc, it) => acc + it.quantidade, 0);
+            const pecasTotais = itens.reduce((acc, it) => acc + it.quantidadeOriginal, 0);
+            const pecasExpedidas = pecasTotais - pecasRestantes;
+            
+            // Formata datas
+            const dateEntrada = new Date(d.data_criacao);
+            const dateEntradaStr = `${dateEntrada.toLocaleDateString('pt-BR')} ${dateEntrada.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}`;
+            
+            let dateLimiteStr = '---';
+            if (d.data_limite) {
+                const dateLimite = new Date(d.data_limite);
+                dateLimiteStr = `${dateLimite.toLocaleDateString('pt-BR')} ${dateLimite.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}`;
+            }
+            
+            // Ações dependendo do status de conclusão
+            let acoesHtml = '';
+            if (d.concluido) {
+                acoesHtml = `
+                    <div style="display:flex; justify-content:center; gap: 6px;">
+                        <button class="btn btn-outline" onclick="exportarCsvPeloPainel(${d.id})" style="padding: 4px 8px; font-size: 11px; height: auto;">CSV</button>
+                        <button class="btn btn-danger-outline" onclick="excluirDespachantePeloPainel(${d.id}, '${d.nome}')" style="padding: 4px 8px; font-size: 11px; height: auto;">Excluir</button>
+                    </div>
+                `;
+            } else {
+                acoesHtml = `
+                    <div style="display:flex; justify-content:center; gap: 6px;">
+                        <button class="btn btn-primary" onclick="selecionarParaExpedir(${d.id})" style="padding: 4px 8px; font-size: 11px; height: auto; box-shadow:none;">Expedir</button>
+                        <button class="btn btn-danger-outline" onclick="excluirDespachantePeloPainel(${d.id}, '${d.nome}')" style="padding: 4px 8px; font-size: 11px; height: auto;">Excluir</button>
+                    </div>
+                `;
+            }
+            
+            tr.innerHTML = `
+                <td style="padding: 10px 8px; font-weight: 700;">${d.nome}</td>
+                <td style="padding: 10px 8px; text-align: center;">
+                    <strong>${pecasExpedidas} / ${pecasTotais}</strong>
+                    <span style="display:block; font-size:10px; color:var(--text-muted);">${totalLinhas} itens</span>
+                </td>
+                <td style="padding: 10px 8px; color: var(--text-secondary);">${dateEntradaStr}</td>
+                <td style="padding: 10px 8px; color: var(--text-secondary);">${dateLimiteStr}</td>
+                <td style="padding: 10px 8px;">
+                    <div class="despachante-timer" data-deadline="${d.data_limite}" data-concluido="${d.concluido}">---</div>
+                </td>
+                <td style="padding: 10px 8px; text-align: center;">${acoesHtml}</td>
+            `;
+            
+            elements.despachantesTableBody.appendChild(tr);
+        }
+        
+        // Atualiza imediatamente os timers após renderizar
+        updateAllTimers();
+    } catch (e) {
+        console.error('Falha ao renderizar tabela de despachantes:', e);
+    }
+}
+
+// Funções globais atreladas à tela do Painel Gerencial
+window.selecionarParaExpedir = function(id) {
+    switchTab('expedicao');
+    setTimeout(() => {
+        elements.activeDespachanteSelect.value = id;
+        elements.activeDespachanteSelect.dispatchEvent(new Event('change'));
+    }, 100);
+};
+
+window.excluirDespachantePeloPainel = async function(id, nome) {
+    if (confirm(`Tem certeza de que deseja excluir permanentemente o despachante "${nome}" e todos os seus itens do banco local?`)) {
+        try {
+            await db.deleteDespachante(id);
+            showToast('Removido', 'Lista de despacho excluída com sucesso.', 'success');
+            playSoundEffect('cancel');
+            
+            renderDespachantesTable();
+            loadDespachantesDropdown();
+        } catch (e) {
+            console.error('Erro ao excluir despachante pelo painel:', e);
+            showToast('Erro ao Excluir', 'Não foi possível apagar os dados do banco local.', 'error');
+        }
+    }
+};
+
+window.exportarCsvPeloPainel = async function(id) {
+    try {
+        const despachante = await db.getDespachante(id);
+        const logs = await db.getLogsByDespachante(id);
+        if (logs.length === 0) {
+            showToast('Erro', 'Não há registros para este despachante.', 'error');
+            return;
+        }
+        
+        let csvContent = '\uFEFF';
+        csvContent += 'Data/Hora;Nota Fiscal;Ação;EAN/SKU;Qtd;Tipo\r\n';
+        
+        logs.forEach(log => {
+            const dateObj = new Date(log.timestamp);
+            const dateStr = `${dateObj.toLocaleDateString('pt-BR')} ${dateObj.toLocaleTimeString('pt-BR')}`;
+            const line = [
+                dateStr,
+                log.nota,
+                log.acao,
+                `="${log.ean}"`,
+                log.quantidade,
+                log.tipo
+            ].map(val => `"${val.toString().replace(/"/g, '""')}"`).join(';');
+            csvContent += line + '\r\n';
+        });
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `auditoria_${despachante.nome.replace(/\s+/g, '_')}_id_${id}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showToast('Logs Exportados', 'Resumo CSV baixado com sucesso.', 'success');
+        playSoundEffect('confirm');
+    } catch (e) {
+        console.error('Erro ao exportar logs pelo painel:', e);
+        showToast('Erro ao exportar', 'Falha ao processar logs do despachante.', 'error');
+    }
+};
+
+// Temporizador dinâmico para os prazos limite
+function updateAllTimers() {
+    const timers = document.querySelectorAll('.despachante-timer');
+    timers.forEach(el => {
+        const isConcluido = el.getAttribute('data-concluido') === 'true';
+        if (isConcluido) {
+            el.innerHTML = '<span style="color: var(--success); font-weight: 700;">Concluído ✅</span>';
+            return;
+        }
+        
+        const deadlineStr = el.getAttribute('data-deadline');
+        if (!deadlineStr) {
+            el.textContent = '---';
+            return;
+        }
+        
+        const deadline = new Date(deadlineStr).getTime();
+        const now = new Date().getTime();
+        const diff = deadline - now;
+        
+        if (diff <= 0) {
+            el.innerHTML = '<span class="text-danger" style="color: #ef4444; font-weight: 700; display: inline-block;">Atrasado! 🚨</span>';
+        } else {
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            const hStr = hours.toString().padStart(2, '0');
+            const mStr = minutes.toString().padStart(2, '0');
+            const sStr = seconds.toString().padStart(2, '0');
+            
+            let color = '#60a5fa'; // Azul claro
+            if (diff < 1000 * 60 * 15) {
+                color = '#ef4444'; // Vermelho se faltar menos de 15 min
+            } else if (diff < 1000 * 60 * 60) {
+                color = '#f59e0b'; // Amarelo se faltar menos de 1 hora
+            }
+            
+            el.innerHTML = `<span style="color: ${color}; font-family: monospace; font-weight: 700;">${hStr}:${mStr}:${sStr}</span>`;
+        }
+    });
+}
+
+// Inicializa o contador regressivo global de 1 segundo
+setInterval(updateAllTimers, 1000);

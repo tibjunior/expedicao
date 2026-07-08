@@ -171,16 +171,21 @@
                         <!-- Painel de Importação -->
                         <div class="card glass-card shadow-lg" id="import-card">
                             <h2 class="card-title">1. Carregar Lista de Vendas</h2>
-                            <p class="card-subtitle">Importe um PDF vinculando-o a um despachante para criar uma nova fila.</p>
+                            <p class="card-subtitle">Importe um PDF vinculando-o a um despachante e definindo o prazo limite.</p>
                             
                             <div class="form-group-despachante">
                                 <label for="despachante-name-input">👤 Nome do Despachante Responsável:</label>
-                                <input type="text" id="despachante-name-input" class="input-despachante" placeholder="Digite o nome do despachante para liberar o envio..." autocomplete="off">
+                                <input type="text" id="despachante-name-input" class="input-despachante" placeholder="Digite o nome do despachante..." autocomplete="off">
                             </div>
 
-                            <div class="drag-drop-area disabled-card" id="drop-area" style="opacity: 0.5; pointer-events: none;">
+                            <div class="form-group-despachante" style="margin-top: 12px;">
+                                <label for="despachante-deadline-input">⏱️ Horário Limite de Expedição:</label>
+                                <input type="datetime-local" id="despachante-deadline-input" class="input-despachante">
+                            </div>
+
+                            <div class="drag-drop-area disabled-card" id="drop-area" style="opacity: 0.5; pointer-events: none; margin-top: 16px;">
                                 <span class="upload-icon">📥</span>
-                                <p class="upload-text">Defina o despachante acima para habilitar o upload</p>
+                                <p class="upload-text">Preencha o despachante e o prazo limite para liberar</p>
                             </div>
                             <input type="file" id="pdf-file-input" accept="application/pdf" style="display: none;" disabled>
                             
@@ -190,8 +195,37 @@
                         </div>
                     </div>
 
-                    <!-- Lado Direito: Histórico de Auditoria Local -->
-                    <div class="admin-right-col">
+                    <!-- Lado Direito: Listas de Despacho e Logs -->
+                    <div class="admin-right-col" style="gap: 20px; display: flex; flex-direction: column;">
+                        <!-- Painel de Listas de Despacho Ativas -->
+                        <div class="card glass-card shadow-lg" id="despachantes-card" style="padding: 20px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                                <span style="font-size: 20px;">📋</span>
+                                <h2 class="card-title" style="margin: 0;">Painel de Listas de Despacho</h2>
+                            </div>
+                            
+                            <div class="table-container scrollable" style="max-height: 250px; overflow-y: auto;">
+                                <table class="despachantes-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-weight: 700;">
+                                            <th style="padding: 10px 8px;">Despachante</th>
+                                            <th style="padding: 10px 8px; text-align: center;">Itens</th>
+                                            <th style="padding: 10px 8px;">Importação</th>
+                                            <th style="padding: 10px 8px;">Prazo Limite</th>
+                                            <th style="padding: 10px 8px;">Tempo Restante</th>
+                                            <th style="padding: 10px 8px; text-align: center;">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="despachantes-table-body">
+                                        <!-- Preenchido dinamicamente via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="despachantes-empty" id="despachantes-empty" style="text-align: center; padding: 20px; color: var(--text-muted);">
+                                Nenhuma lista de despacho criada ainda.
+                            </div>
+                        </div>
+
                         <!-- Painel de Logs de Auditoria -->
                         <div class="card glass-card shadow-lg flex-1 admin-logs-card">
                             <div class="logs-card-header">
