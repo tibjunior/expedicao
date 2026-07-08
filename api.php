@@ -113,8 +113,13 @@ switch ($action) {
     case 'get_logs':
         try {
             $despachante_id = isset($_GET['despachante_id']) ? intval($_GET['despachante_id']) : 0;
-            $stmt = $db->prepare("SELECT * FROM logs WHERE despachante_id = :despachante_id ORDER BY timestamp DESC");
-            $stmt->execute([':despachante_id' => $despachante_id]);
+            if ($despachante_id > 0) {
+                $stmt = $db->prepare("SELECT * FROM logs WHERE despachante_id = :despachante_id ORDER BY timestamp DESC");
+                $stmt->execute([':despachante_id' => $despachante_id]);
+            } else {
+                $stmt = $db->prepare("SELECT * FROM logs ORDER BY timestamp DESC LIMIT 100");
+                $stmt->execute();
+            }
             echo json_encode($stmt->fetchAll());
         } catch (PDOException $e) {
             http_response_code(500);

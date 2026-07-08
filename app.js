@@ -332,7 +332,7 @@ class ExpedicaoDB {
 
     getLogsByDespachante(despachanteId) {
         if (!this.isLocal) {
-            return this.apiGet('get_logs', { despachante_id: despachanteId })
+            return this.apiGet('get_logs', { despachante_id: despachanteId || 0 })
                 .then(list => {
                     return list.map(log => {
                         log.id = parseInt(log.id, 10);
@@ -344,16 +344,31 @@ class ExpedicaoDB {
         }
 
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(['logs'], 'readonly');
-            const store = transaction.objectStore('logs');
-            const index = store.index('despachante_id');
-            const request = index.getAll(IDBKeyRange.only(despachanteId));
-            request.onsuccess = (e) => {
-                const list = e.target.result || [];
-                list.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
-                resolve(list);
-            };
-            request.onerror = (e) => reject(e);
+            if (!this.db) return resolve([]);
+            try {
+                const transaction = this.db.transaction(['logs'], 'readonly');
+                const store = transaction.objectStore('logs');
+                
+                let request;
+                if (despachanteId) {
+                    const index = store.index('despachante_id');
+                    request = index.getAll(IDBKeyRange.only(despachanteId));
+                } else {
+                    request = store.getAll();
+                }
+                
+                request.onsuccess = (e) => {
+                    let list = e.target.result || [];
+                    list.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    if (!despachanteId) {
+                        list = list.slice(0, 100);
+                    }
+                    resolve(list);
+                };
+                request.onerror = (e) => reject(e);
+            } catch (err) {
+                reject(err);
+            }
         });
     }
 }
@@ -1856,7 +1871,13 @@ function switchTab(tab, selectedId = null) {
         elements.tabContentAdministracao.classList.add('active');
         
         stopCameraScanner();
-        renderLogs();
+        
+        // Busca logs iniciais (globais ou da lista ativa) para preencher a tela antes do primeiro sync
+        db.getLogsByDespachante(state.activeDespachanteId || 0).then(logs => {
+            state.logs = logs;
+            renderLogs();
+        });
+        
         renderDespachantesTable();
         startBackgroundSync();
     }
@@ -2220,50 +2241,86 @@ function startBackgroundSync() {
     
     // Sincronização inteligente a cada 2 segundos
     syncIntervalId = setInterval(async () => {
-        // Interrompe se a janela estiver minimizada, se não houver despachante ativo ou se não estiver na tela de expedição
         if (document.hidden) return;
-        if (!state.activeDespachanteId) return;
-        if (state.activeTab !== 'expedicao') return;
         
-        try {
-            const freshItems = await db.getItensByDespachante(state.activeDespachanteId);
+        // ==========================================
+        // 1. FLUXO PARA A ABA DE EXPEDIÇÃO
+        // ==========================================
+        if (state.activeTab === 'expedicao') {
+            if (!state.activeDespachanteId) return;
             
-            // Compara as quantidades locais vs remotas para detectar mudanças
-            let hasChanges = false;
-            if (freshItems.length !== state.items.length) {
-                hasChanges = true;
-            } else {
-                for (let i = 0; i < freshItems.length; i++) {
-                    const localItem = state.items[i];
-                    const serverItem = freshItems[i];
-                    if (
-                        localItem.id === serverItem.id && 
-                        (localItem.quantidade !== serverItem.quantidade || localItem.expedido !== serverItem.expedido)
-                    ) {
-                        hasChanges = true;
-                        break;
+            try {
+                const freshItems = await db.getItensByDespachante(state.activeDespachanteId);
+                
+                // Compara as quantidades locais vs remotas para detectar mudanças
+                let hasChanges = false;
+                if (freshItems.length !== state.items.length) {
+                    hasChanges = true;
+                } else {
+                    for (let i = 0; i < freshItems.length; i++) {
+                        const localItem = state.items[i];
+                        const serverItem = freshItems[i];
+                        if (
+                            localItem.id === serverItem.id && 
+                            (localItem.quantidade !== serverItem.quantidade || localItem.expedido !== serverItem.expedido)
+                        ) {
+                            hasChanges = true;
+                            break;
+                        }
                     }
                 }
-            }
-            
-            // Só atualiza a tela se detectou mudanças reais feitas por outro operador
-            if (hasChanges) {
-                state.items = freshItems;
-                renderTable();
-                updateProgress();
                 
-                // Recarrega os logs também
-                state.logs = await db.getLogsByDespachante(state.activeDespachanteId);
-                renderLogs();
-                
-                // Verifica conclusão total da fila
-                const totalPendentes = state.items.reduce((acc, item) => acc + item.quantidade, 0);
-                if (totalPendentes === 0 && state.items.length > 0) {
-                    checkAllCompleted();
+                // Só atualiza a tela se detectou mudanças reais feitas por outro operador
+                if (hasChanges) {
+                    state.items = freshItems;
+                    renderTable();
+                    updateProgress();
+                    
+                    // Recarrega os logs também
+                    state.logs = await db.getLogsByDespachante(state.activeDespachanteId);
+                    renderLogs();
+                    
+                    // Verifica conclusão total da fila
+                    const totalPendentes = state.items.reduce((acc, item) => acc + item.quantidade, 0);
+                    if (totalPendentes === 0 && state.items.length > 0) {
+                        checkAllCompleted();
+                    }
                 }
+            } catch (e) {
+                console.warn("Erro ao sincronizar expedição em background:", e);
             }
-        } catch (e) {
-            console.warn("Erro ao sincronizar em background:", e);
+        } 
+        // ==========================================
+        // 2. FLUXO PARA A ABA DE ADMINISTRAÇÃO
+        // ==========================================
+        else if (state.activeTab === 'administracao') {
+            try {
+                // Atualiza a tabela do painel de listas de despacho
+                await renderDespachantesTable();
+                
+                // Atualiza a tabela de Auditoria com os logs correspondentes (globais ou da lista ativa)
+                const targetLogId = state.activeDespachanteId || 0;
+                const freshLogs = await db.getLogsByDespachante(targetLogId);
+                
+                let logsChanged = false;
+                if (freshLogs.length !== state.logs.length) {
+                    logsChanged = true;
+                } else {
+                    for (let i = 0; i < freshLogs.length; i++) {
+                        if (freshLogs[i].id !== state.logs[i].id || freshLogs[i].timestamp !== state.logs[i].timestamp) {
+                            logsChanged = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (logsChanged) {
+                    state.logs = freshLogs;
+                    renderLogs();
+                }
+            } catch (e) {
+                console.warn("Erro ao sincronizar admin em background:", e);
+            }
         }
     }, 2000);
 }
