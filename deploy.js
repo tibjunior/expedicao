@@ -9,7 +9,9 @@ const ALLOWED_FILES = [
     'app.js',
     'pdf-parser.js',
     'teste.pdf',
-    'favicon.svg'
+    'favicon.svg',
+    'api.php',
+    '.htaccess'
 ];
 
 /**

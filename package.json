@@ -12,6 +12,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "basic-ftp": "^6.0.1"
+    "basic-ftp": "^6.0.1",
+    "pdf-parse": "^2.4.5"
   }
 }
