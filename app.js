@@ -811,12 +811,8 @@ async function handlePdfFile(file) {
                 // Recarrega a tabela de listas de despacho ativas
                 renderDespachantesTable();
                 
-                // Pergunta se deseja chavear para a aba de expedição
-                if (confirm(`Lista importada com sucesso para o despachante "${despachanteNome}". Deseja ir para a aba de Expedição de Vendas?`)) {
-                    switchTab('expedicao', despachanteId);
-                } else {
-                    renderLogs();
-                }
+                // Mantém a tela no painel do administrador e atualiza logs
+                renderLogs();
             } catch (err) {
                 showToast('Erro de Parsing', err.message, 'error');
                 showLoadingState(false);
