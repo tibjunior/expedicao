@@ -196,7 +196,7 @@ class PdfParser {
                 let eanEncontrado = '';
                 for (let j = i + 1; j < lines.length; j++) {
                     const nextLineObj = lines[j];
-                    const nextLineText = nextLineObj ? nextLineObj.text.trim() : '';
+                    const nextLineText = nextLineObj ? nextLineObj.trim() : '';
                     
                     if (!nextLineText) continue;
                     
@@ -219,7 +219,7 @@ class PdfParser {
                     
                     // O SKU deve estar na linha anterior
                     const prevLineObj = i > 0 ? lines[i - 1] : null;
-                    sku = prevLineObj ? prevLineObj.text.trim() : '';
+                    sku = prevLineObj ? prevLineObj.trim() : '';
                     
                     // Limpa o SKU do final da descrição se estiver duplicado
                     if (sku && descricao.endsWith(sku)) {
