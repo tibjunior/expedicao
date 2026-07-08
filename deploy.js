@@ -8,7 +8,8 @@ const ALLOWED_FILES = [
     'index.css',
     'app.js',
     'pdf-parser.js',
-    'teste.pdf'
+    'teste.pdf',
+    'favicon.svg'
 ];
 
 /**
