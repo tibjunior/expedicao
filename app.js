@@ -646,7 +646,7 @@ function renderTable() {
 window.manualAddUnit = function(id) {
     const item = state.items.find(i => i.id === id);
     if (item && !item.expedido) {
-        processBarcodeRead(item.sku);
+        processBarcodeRead(item.ean);
     }
 };
 
