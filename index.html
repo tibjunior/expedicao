@@ -175,6 +175,23 @@
         </div>
     </div>
 
+    <!-- Modal de Confirmação para Produto Sem EAN -->
+    <div id="no-ean-confirm-modal" style="display: none;">
+        <div class="confirm-modal-card">
+            <div class="confirm-modal-icon">❓</div>
+            <h2>Produto Sem EAN</h2>
+            <p>Deseja expedir este produto mesmo assim?</p>
+            <div class="confirm-product-box">
+                <span id="confirm-product-desc" class="confirm-product-desc">Descrição do Produto</span>
+                <span id="confirm-product-sku" class="confirm-product-sku">SKU: ---</span>
+            </div>
+            <div class="confirm-modal-actions">
+                <button id="btn-confirm-no-ean-yes" class="btn btn-success">SIM (Enter)</button>
+                <button id="btn-confirm-no-ean-no" class="btn btn-danger">NÃO (Esc)</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts da aplicação -->
     <script src="pdf-parser.js?v=2"></script>
     <script src="app.js?v=2"></script>

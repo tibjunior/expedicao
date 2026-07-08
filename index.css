@@ -1051,6 +1051,101 @@ body.light-mode .sku-badge {
 }
 
 /* ==========================================
+   8.6. MODAL DE CONFIRMAÇÃO SEM EAN
+   ========================================== */
+#no-ean-confirm-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(10, 15, 12, 0.96); /* Fundo esverdeado/escuro opaco */
+    z-index: 100000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    backdrop-filter: blur(12px);
+}
+
+.confirm-modal-card {
+    background: rgba(20, 25, 22, 0.95);
+    border: 2px solid var(--success);
+    box-shadow: 0 0 50px rgba(16, 185, 129, 0.35);
+    border-radius: 20px;
+    padding: 32px 24px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    animation: modal-zoom-in 0.3s ease-out;
+}
+
+.confirm-modal-icon {
+    font-size: 54px;
+    margin-bottom: 16px;
+    animation: pulse-icon 1.5s infinite;
+}
+
+.confirm-modal-card h2 {
+    color: var(--success);
+    font-size: 22px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.confirm-modal-card p {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+
+.confirm-product-box {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    text-align: left;
+}
+
+.confirm-product-desc {
+    display: block;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: 14.5px;
+    line-height: 1.4;
+}
+
+.confirm-product-sku {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.confirm-modal-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.confirm-modal-actions button {
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 8px;
+}
+
+@keyframes modal-zoom-in {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+/* ==========================================
    9. DESIGN RESPONSIVO PARA CELULAR (MOBILE)
    ========================================== */
 @media (max-width: 768px) {

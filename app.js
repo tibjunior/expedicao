@@ -15,7 +15,9 @@ const state = {
     scannerActive: false,
     pdfBlob: null,
     pdfName: null,
-    errorModalActive: false
+    errorModalActive: false,
+    confirmModalActive: false,
+    confirmTargetItem: null
 };
 
 // Instância do Scanner de Câmera
@@ -58,6 +60,13 @@ function initElements() {
     elements.errorModalDesc = document.getElementById('error-modal-desc');
     elements.errorModalCode = document.getElementById('error-modal-code');
     elements.btnCloseErrorModal = document.getElementById('btn-close-error-modal');
+
+    // Elementos do Modal de Confirmação Sem EAN
+    elements.noEanConfirmModal = document.getElementById('no-ean-confirm-modal');
+    elements.confirmProductDesc = document.getElementById('confirm-product-desc');
+    elements.confirmProductSku = document.getElementById('confirm-product-sku');
+    elements.btnConfirmNoEanYes = document.getElementById('btn-confirm-no-ean-yes');
+    elements.btnConfirmNoEanNo = document.getElementById('btn-confirm-no-ean-no');
 }
 
 // ==========================================
@@ -241,12 +250,28 @@ function initEventListeners() {
         elements.btnCloseErrorModal.addEventListener('click', closeErrorModal);
     }
 
-    // Atalhos de teclado globais (ex: Enter ou Espaço para fechar modal de erro)
+    // Modal de Confirmação Sem EAN
+    if (elements.btnConfirmNoEanYes) {
+        elements.btnConfirmNoEanYes.addEventListener('click', confirmNoEanYes);
+    }
+    if (elements.btnConfirmNoEanNo) {
+        elements.btnConfirmNoEanNo.addEventListener('click', confirmNoEanNo);
+    }
+
+    // Atalhos de teclado globais (ex: Enter ou Espaço para fechar modal de erro/confirmar)
     document.addEventListener('keydown', (e) => {
         if (state.errorModalActive) {
             if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
                 e.preventDefault();
                 closeErrorModal();
+            }
+        } else if (state.confirmModalActive) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                confirmNoEanYes();
+            } else if (e.key === 'Escape' || e.key === 'n' || e.key === 'N') {
+                e.preventDefault();
+                confirmNoEanNo();
             }
         }
     });
@@ -435,7 +460,12 @@ function processBarcodeRead(rawSku) {
         if (alreadyExpedidos.length > 0) {
             showErrorModal('Produto Já Expedido', 'Este produto já foi totalmente processado e expedido nesta lista.', sku);
         } else {
-            showErrorModal('Código Não Encontrado', 'O código lido não foi encontrado na lista de pendentes.', sku);
+            const pendentesSemEan = state.items.filter(item => !item.expedido && !item.temEan);
+            if (pendentesSemEan.length > 0) {
+                showNoEanConfirmModal(pendentesSemEan[0]);
+            } else {
+                showErrorModal('Código Não Encontrado', 'O código lido não foi encontrado na lista de pendentes.', sku);
+            }
         }
     }
 }
@@ -854,6 +884,89 @@ function closeErrorModal() {
     } else {
         // Caso contrário, ele estava usando o leitor físico / teclado.
         // Re-habilita e refoca o input de SKU
+        if (state.items.length > 0) {
+            elements.barcodeInput.disabled = false;
+            elements.barcodeInput.value = '';
+            elements.barcodeInput.focus();
+        }
+    }
+}
+
+// ==========================================
+// 8.5. MODAL DE CONFIRMAÇÃO SEM EAN
+// ==========================================
+function showNoEanConfirmModal(item) {
+    state.confirmModalActive = true;
+    state.confirmTargetItem = item;
+    
+    // Toca alerta de aviso sutil (beep de confirmação com dois tons médios)
+    playBeep(600, 150, 'triangle');
+    
+    elements.confirmProductDesc.textContent = item.descricao;
+    elements.confirmProductSku.textContent = `SKU: ${item.sku}`;
+    elements.noEanConfirmModal.style.display = 'flex';
+    
+    // Desabilita input principal
+    elements.barcodeInput.disabled = true;
+    
+    // Foca no botão SIM por padrão
+    setTimeout(() => {
+        if (elements.btnConfirmNoEanYes) {
+            elements.btnConfirmNoEanYes.focus();
+        }
+    }, 100);
+}
+
+function confirmNoEanYes() {
+    const item = state.confirmTargetItem;
+    elements.noEanConfirmModal.style.display = 'none';
+    state.confirmModalActive = false;
+    state.confirmTargetItem = null;
+    
+    if (item) {
+        // Registra a unidade expedida
+        item.quantidade -= 1;
+        if (item.quantidade <= 0) {
+            item.quantidade = 0;
+            item.expedido = true;
+            item.dataExpedicao = new Date().toISOString();
+        }
+        
+        localStorage.setItem('expedicao_items', JSON.stringify(state.items));
+        renderTable();
+        updateProgress();
+        highlightRow(item.id);
+        
+        if (item.expedido) {
+            playBeep(1000, 80, 'sine');
+            setTimeout(() => playBeep(1300, 100, 'sine'), 100);
+            showToast('Item Expedido', `Concluído: ${item.descricao}`, 'success');
+        } else {
+            playBeep(1000, 100, 'sine');
+            showToast('Unidade Registrada', `+1 de ${item.descricao}. Restam ${item.quantidade} un.`, 'success');
+        }
+        checkAllCompleted();
+    }
+    
+    restoreActiveScanner();
+}
+
+function confirmNoEanNo() {
+    elements.noEanConfirmModal.style.display = 'none';
+    state.confirmModalActive = false;
+    state.confirmTargetItem = null;
+    
+    // Alerta de cancelamento (som curto)
+    playBeep(450, 80, 'sine');
+    
+    restoreActiveScanner();
+}
+
+function restoreActiveScanner() {
+    if (elements.cameraScannerContainer && elements.cameraScannerContainer.classList.contains('active')) {
+        state.scannerActive = false;
+        startCameraScanner();
+    } else {
         if (state.items.length > 0) {
             elements.barcodeInput.disabled = false;
             elements.barcodeInput.value = '';
