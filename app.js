@@ -528,7 +528,14 @@ function processBarcodeRead(rawSku) {
             showErrorModal('Produto Já Expedido', 'Este produto já foi totalmente processado e expedido nesta lista.', code);
         } else {
             const pendentesSemEan = state.items.filter(item => !item.expedido && !item.temEan);
-            if (pendentesSemEan.length > 0) {
+            
+            // Só aciona confirmação se o código parecer um EAN ou for o SKU exato do item sem EAN
+            const isEanLike = /^\d{8,14}$/.test(code);
+            const matchedSkuItem = pendentesSemEan.find(item => item.sku.toUpperCase() === code);
+            
+            if (matchedSkuItem) {
+                showNoEanConfirmModal(matchedSkuItem);
+            } else if (isEanLike && pendentesSemEan.length > 0) {
                 showNoEanConfirmModal(pendentesSemEan[0]);
             } else {
                 addLog('Erro: Não Encontrado', '---', code, multiplier, 'error');
