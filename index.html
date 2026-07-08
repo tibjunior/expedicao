@@ -57,13 +57,10 @@
                     </div>
                     <div class="despachante-status-info" id="despachante-status-info" style="display: none;">
                         <span class="badge badge-pending">Em Expedição</span>
-                    </div>
-                </div>
-
-                <!-- Painel Operacional Lateralizado (Duas Colunas) -->
-                <div class="dashboard-columns" style="display: flex; gap: 20px; width: 100%;">
+                              <!-- Painel Operacional Lateralizado (Duas Colunas) -->
+                <div class="dashboard-layout">
                     <!-- Coluna Esquerda: Leitor e Progresso -->
-                    <section class="control-column" style="flex: 1; max-width: 420px; display: flex; flex-direction: column; gap: 20px;">
+                    <section class="control-column">
                         <!-- Painel de Leitor de SKU -->
                         <div class="card glass-card shadow-lg" id="reader-card" style="display: none;">
                             <h2 class="card-title">2. Conferir Produto</h2>
@@ -118,9 +115,9 @@
                     </section>
 
                     <!-- Coluna Direita: Fila de Itens -->
-                    <section class="list-column" id="list-column" style="flex: 2; display: flex; flex-direction: column;">
+                    <section class="list-column" id="list-column">
                         <!-- Lista de Itens -->
-                        <div class="card glass-card shadow-lg flex-1 flex flex-col" id="items-card" style="height: 100%;">
+                        <div class="card glass-card shadow-lg flex-1 flex flex-col" id="items-card">
                             <div class="card-header-row">
                                 <h2 class="card-title">Itens em Espera (Fila de Expedição)</h2>
                                 <div class="filter-group">
@@ -165,9 +162,9 @@
 
             <!-- ABA 2: ADMINISTRAÇÃO DE VENDAS -->
             <div class="tab-content" id="tab-content-administracao" style="width: 100%;">
-                <div style="display: flex; gap: 20px; width: 100%;">
+                <div class="admin-layout">
                     <!-- Lado Esquerdo: Upload de PDF -->
-                    <div style="flex: 1; max-width: 450px;">
+                    <div class="admin-left-col">
                         <!-- Painel de Importação -->
                         <div class="card glass-card shadow-lg" id="import-card">
                             <h2 class="card-title">1. Carregar Lista de Vendas</h2>
@@ -191,11 +188,11 @@
                     </div>
 
                     <!-- Lado Direito: Histórico de Auditoria Local -->
-                    <div style="flex: 2; display: flex; flex-direction: column;">
+                    <div class="admin-right-col">
                         <!-- Painel de Logs de Auditoria -->
-                        <div class="card glass-card shadow-lg flex-1" style="display: flex; flex-direction: column; padding: 20px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="card glass-card shadow-lg flex-1 admin-logs-card">
+                            <div class="logs-card-header">
+                                <div class="logs-card-title-group">
                                     <span style="font-size: 20px;">📋</span>
                                     <h2 class="card-title" style="margin: 0;">Histórico de Auditoria Local</h2>
                                     <span class="logs-count-badge" id="logs-count-badge">0</span>
@@ -206,7 +203,7 @@
                                 </div>
                             </div>
                             
-                            <div class="logs-table-wrapper scrollable" style="flex: 1; max-height: 480px;">
+                            <div class="logs-table-wrapper scrollable">
                                 <table class="logs-table">
                                     <thead>
                                         <tr>
@@ -223,7 +220,7 @@
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="logs-empty" id="logs-empty" style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+                            <div class="logs-empty" id="logs-empty">
                                 Nenhum evento registrado ainda. Carregue um PDF na coluna ao lado e comece a bipar.
                             </div>
                         </div>
