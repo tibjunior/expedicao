@@ -14,9 +14,16 @@ class ExpedicaoDB {
         this.dbName = 'ExpedicaoWMS';
         this.dbVersion = 1;
         this.db = null;
+        // Detecta se está em localhost ou abrindo o arquivo direto
+        this.isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
     }
 
-    open() {
+    async open() {
+        if (!this.isLocal) {
+            console.log("Conectado ao Banco SQLite Remoto via api.php");
+            return true;
+        }
+
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(this.dbName, this.dbVersion);
 
@@ -55,7 +62,34 @@ class ExpedicaoDB {
         });
     }
 
+    async apiPost(action, data) {
+        const response = await fetch(`api.php?action=${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+            throw new Error(`Erro na API (${action}): ${response.statusText}`);
+        }
+        return await response.json();
+    }
+
+    async apiGet(action, params = {}) {
+        const queryParams = new URLSearchParams(params).toString();
+        const url = `api.php?action=${action}${queryParams ? '&' + queryParams : ''}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Erro na API (${action}): ${response.statusText}`);
+        }
+        return await response.json();
+    }
+
     addDespachante(nome, dataLimite) {
+        if (!this.isLocal) {
+            return this.apiPost('add_despachante', { nome, data_limite: dataLimite })
+                .then(res => parseInt(res.id, 10));
+        }
+
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['despachantes'], 'readwrite');
             const store = transaction.objectStore('despachantes');
@@ -72,6 +106,17 @@ class ExpedicaoDB {
     }
 
     getDespachante(id) {
+        if (!this.isLocal) {
+            return this.apiGet('get_despachante', { id })
+                .then(d => {
+                    if (d) {
+                        d.id = parseInt(d.id, 10);
+                        d.concluido = parseInt(d.concluido, 10);
+                    }
+                    return d;
+                });
+        }
+
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['despachantes'], 'readonly');
             const store = transaction.objectStore('despachantes');
@@ -82,6 +127,17 @@ class ExpedicaoDB {
     }
 
     getDespachantesAtivos() {
+        if (!this.isLocal) {
+            return this.apiGet('get_despachantes_ativos')
+                .then(list => {
+                    return list.map(d => {
+                        d.id = parseInt(d.id, 10);
+                        d.concluido = parseInt(d.concluido, 10);
+                        return d;
+                    });
+                });
+        }
+
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['despachantes'], 'readonly');
             const store = transaction.objectStore('despachantes');
@@ -97,6 +153,17 @@ class ExpedicaoDB {
     }
 
     getAllDespachantes() {
+        if (!this.isLocal) {
+            return this.apiGet('get_all_despachantes')
+                .then(list => {
+                    return list.map(d => {
+                        d.id = parseInt(d.id, 10);
+                        d.concluido = parseInt(d.concluido, 10);
+                        return d;
+                    });
+                });
+        }
+
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['despachantes'], 'readonly');
             const store = transaction.objectStore('despachantes');
@@ -111,6 +178,11 @@ class ExpedicaoDB {
     }
 
     marcarDespachanteConcluido(id) {
+        if (!this.isLocal) {
+            return this.apiPost('marcar_despachante_concluido', { id })
+                .then(() => true);
+        }
+
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['despachantes'], 'readwrite');
             const store = transaction.objectStore('despachantes');
@@ -131,6 +203,11 @@ class ExpedicaoDB {
     }
 
     deleteDespachante(id) {
+        if (!this.isLocal) {
+            return this.apiPost('delete_despachante', { id })
+                .then(() => true);
+        }
+
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['despachantes', 'itens', 'logs'], 'readwrite');
             
@@ -164,6 +241,11 @@ class ExpedicaoDB {
     }
 
     saveItens(itens, despachanteId) {
+        if (!this.isLocal) {
+            return this.apiPost('save_itens', { itens, despachante_id: despachanteId })
+                .then(() => true);
+        }
+
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['itens'], 'readwrite');
             const store = transaction.objectStore('itens');
@@ -193,6 +275,21 @@ class ExpedicaoDB {
     }
 
     getItensByDespachante(despachanteId) {
+        if (!this.isLocal) {
+            return this.apiGet('get_itens', { despachante_id: despachanteId })
+                .then(list => {
+                    return list.map(item => {
+                        item.id = parseInt(item.id, 10);
+                        item.despachante_id = parseInt(item.despachante_id, 10);
+                        item.temEan = item.temEan === 1 || item.temEan === true;
+                        item.quantidade = parseInt(item.quantidade, 10);
+                        item.quantidadeOriginal = parseInt(item.quantidadeOriginal, 10);
+                        item.expedido = item.expedido === 1 || item.expedido === true;
+                        return item;
+                    });
+                });
+        }
+
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['itens'], 'readonly');
             const store = transaction.objectStore('itens');
@@ -204,6 +301,11 @@ class ExpedicaoDB {
     }
 
     updateItem(item) {
+        if (!this.isLocal) {
+            return this.apiPost('update_item', { item })
+                .then(() => true);
+        }
+
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['itens'], 'readwrite');
             const store = transaction.objectStore('itens');
@@ -214,6 +316,11 @@ class ExpedicaoDB {
     }
 
     addLog(logEntry) {
+        if (!this.isLocal) {
+            return this.apiPost('add_log', { log: logEntry })
+                .then(() => true);
+        }
+
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['logs'], 'readwrite');
             const store = transaction.objectStore('logs');
@@ -224,6 +331,18 @@ class ExpedicaoDB {
     }
 
     getLogsByDespachante(despachanteId) {
+        if (!this.isLocal) {
+            return this.apiGet('get_logs', { despachante_id: despachanteId })
+                .then(list => {
+                    return list.map(log => {
+                        log.id = parseInt(log.id, 10);
+                        log.despachante_id = parseInt(log.despachante_id, 10);
+                        log.quantidade = parseInt(log.quantidade, 10);
+                        return log;
+                    });
+                });
+        }
+
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['logs'], 'readonly');
             const store = transaction.objectStore('logs');
@@ -351,7 +470,6 @@ document.addEventListener('DOMContentLoaded', () => {
         initEventListeners();
         restoreStateFromStorage();
         setupAutofocus();
-        renderDespachantesTable();
     }).catch(err => {
         console.error('Falha critica ao iniciar banco de dados IndexedDB:', err);
         showToast('Erro de Inicialização', 'O banco de dados do armazém falhou ao abrir.', 'error');
@@ -1887,8 +2005,11 @@ async function deleteActiveDespachante() {
 // ==========================================
 
 // Renderiza a tabela de listas de despacho ativas na aba do administrador
+let isRenderingDespachantesTable = false;
 async function renderDespachantesTable() {
     if (!elements.despachantesTableBody) return;
+    if (isRenderingDespachantesTable) return;
+    isRenderingDespachantesTable = true;
     
     elements.despachantesTableBody.innerHTML = '';
     
@@ -1898,6 +2019,7 @@ async function renderDespachantesTable() {
         if (despachantes.length === 0) {
             elements.despachantesEmpty.style.display = 'block';
             elements.despachantesTableBody.closest('.table-container').style.display = 'none';
+            isRenderingDespachantesTable = false;
             return;
         }
         
@@ -1964,6 +2086,8 @@ async function renderDespachantesTable() {
         updateAllTimers();
     } catch (e) {
         console.error('Falha ao renderizar tabela de despachantes:', e);
+    } finally {
+        isRenderingDespachantesTable = false;
     }
 }
 
