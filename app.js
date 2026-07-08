@@ -1932,6 +1932,7 @@ async function loadDespachanteData(id) {
         elements.despachanteStatusInfo.style.display = 'none';
         
         stopCameraScanner();
+        stopBackgroundSync();
         return;
     }
     
@@ -1972,6 +1973,9 @@ async function loadDespachanteData(id) {
         renderTable();
         updateProgress();
         renderLogs();
+        
+        // Inicia sincronização automática em background
+        startBackgroundSync();
         
         // Foco automático
         setTimeout(setupAutofocus, 100);
@@ -2205,3 +2209,77 @@ function updateAllTimers() {
 
 // Inicializa o contador regressivo global de 1 segundo
 setInterval(updateAllTimers, 1000);
+
+// ==========================================
+// 8.12. SINCRONIZADOR ONLINE DE BACKGROUND
+// ==========================================
+let syncIntervalId = null;
+
+function startBackgroundSync() {
+    stopBackgroundSync(); // Evita timers duplicados
+    
+    // Sincronização inteligente a cada 2 segundos
+    syncIntervalId = setInterval(async () => {
+        // Interrompe se a janela estiver minimizada, se não houver despachante ativo ou se não estiver na tela de expedição
+        if (document.hidden) return;
+        if (!state.activeDespachanteId) return;
+        if (state.activeTab !== 'expedicao') return;
+        
+        try {
+            const freshItems = await db.getItensByDespachante(state.activeDespachanteId);
+            
+            // Compara as quantidades locais vs remotas para detectar mudanças
+            let hasChanges = false;
+            if (freshItems.length !== state.items.length) {
+                hasChanges = true;
+            } else {
+                for (let i = 0; i < freshItems.length; i++) {
+                    const localItem = state.items[i];
+                    const serverItem = freshItems[i];
+                    if (
+                        localItem.id === serverItem.id && 
+                        (localItem.quantidade !== serverItem.quantidade || localItem.expedido !== serverItem.expedido)
+                    ) {
+                        hasChanges = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Só atualiza a tela se detectou mudanças reais feitas por outro operador
+            if (hasChanges) {
+                state.items = freshItems;
+                renderTable();
+                updateProgress();
+                
+                // Recarrega os logs também
+                state.logs = await db.getLogsByDespachante(state.activeDespachanteId);
+                renderLogs();
+                
+                // Verifica conclusão total da fila
+                const totalPendentes = state.items.reduce((acc, item) => acc + item.quantidade, 0);
+                if (totalPendentes === 0 && state.items.length > 0) {
+                    checkAllCompleted();
+                }
+            }
+        } catch (e) {
+            console.warn("Erro ao sincronizar em background:", e);
+        }
+    }, 2000);
+}
+
+function stopBackgroundSync() {
+    if (syncIntervalId) {
+        clearInterval(syncIntervalId);
+        syncIntervalId = null;
+    }
+}
+
+// Pausa a sincronização quando a janela do navegador perde o foco (economiza CPU/Servidor)
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        stopBackgroundSync();
+    } else {
+        startBackgroundSync();
+    }
+});
