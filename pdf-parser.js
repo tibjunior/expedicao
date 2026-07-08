@@ -192,50 +192,41 @@ class PdfParser {
                 let descricao = '';
                 let temEan = false;
                 
-                // Se a linha atual (sem a quantidade) contém apenas dígitos (ex: EAN de 8 a 14 dígitos)
-                if (/^\d{8,14}$/.test(cleanLine)) {
-                    ean = cleanLine;
+                // Busca o EAN varrendo as linhas seguintes, antes de mudar de Nota ou de produto
+                let eanEncontrado = '';
+                for (let j = i + 1; j < lines.length; j++) {
+                    const nextLineObj = lines[j];
+                    const nextLineText = nextLineObj ? nextLineObj.text.trim() : '';
+                    
+                    if (!nextLineText) continue;
+                    
+                    // Se encontrar um EAN (8 a 14 dígitos numéricos)
+                    if (/^\d{8,14}$/.test(nextLineText)) {
+                        eanEncontrado = nextLineText;
+                        break;
+                    }
+                    
+                    // Se encontrar uma nova Nota ou outro produto com quantidade, interrompe a busca
+                    if (nextLineText.startsWith('Nota') || qtyRegex.test(nextLineText)) {
+                        break;
+                    }
+                }
+                
+                if (eanEncontrado) {
+                    ean = eanEncontrado;
                     temEan = true;
+                    descricao = cleanLine;
                     
-                    // O SKU e a descrição devem estar nas linhas anteriores
+                    // O SKU deve estar na linha anterior
                     const prevLineObj = i > 0 ? lines[i - 1] : null;
-                    const prevLine = prevLineObj ? prevLineObj.text.trim() : '';
-                    const prevPrevLineObj = i > 1 ? lines[i - 2] : null;
-                    const prevPrevLine = prevPrevLineObj ? prevPrevLineObj.text.trim() : '';
+                    sku = prevLineObj ? prevLineObj.text.trim() : '';
                     
-                    // Se a linha imediatamente anterior for muito curta (ex: SKU isolado como '4275' ou 'AX900')
-                    const isPrevShort = prevLine.length > 0 && prevLine.length < 25 && !prevLine.includes('\t');
-                    
-                    if (isPrevShort && prevPrevLine && !prevPrevLine.startsWith('Nota') && !prevPrevLine.includes('Produto')) {
-                        sku = prevLine;
-                        descricao = prevPrevLine;
-                        
-                        // Limpa o SKU do final da descrição se estiver duplicado
-                        if (descricao.endsWith(sku)) {
-                            descricao = descricao.substring(0, descricao.length - sku.length).trim();
-                        }
-                    } else if (prevLine) {
-                        // Linha anterior longa contendo descrição + SKU conjugados
-                        const prevTabs = prevLine.split('\t').map(p => p.trim()).filter(Boolean);
-                        if (prevTabs.length >= 2) {
-                            descricao = prevTabs[0];
-                            sku = prevTabs[1];
-                        } else {
-                            const prevSpaces = prevLine.split(/\s+/);
-                            if (prevSpaces.length >= 2) {
-                                sku = prevSpaces[prevSpaces.length - 1];
-                                descricao = prevSpaces.slice(0, -1).join(' ');
-                            } else {
-                                sku = prevLine;
-                                descricao = prevLine;
-                            }
-                        }
-                    } else {
-                        sku = ean;
-                        descricao = 'Produto Sem Descrição';
+                    // Limpa o SKU do final da descrição se estiver duplicado
+                    if (sku && descricao.endsWith(sku)) {
+                        descricao = descricao.substring(0, descricao.length - sku.length).trim();
                     }
                 } else {
-                    // Linha única (sem EAN numérico separado)
+                    // Linha única (sem EAN numérico separado nas linhas seguintes)
                     const tabs = cleanLine.split('\t').map(p => p.trim()).filter(Boolean);
                     if (tabs.length >= 2) {
                         descricao = tabs[0];
@@ -250,7 +241,7 @@ class PdfParser {
                             descricao = cleanLine;
                         }
                     }
-                    ean = sku; // Sem EAN separado, o buscador assume o SKU
+                    ean = sku;
                     temEan = false;
                 }
                 
