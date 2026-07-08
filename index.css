@@ -1146,6 +1146,227 @@ body.light-mode .sku-badge {
 }
 
 /* ==========================================
+   8.7. SELETOR DE PERFIL DE SOM (HEADER)
+   ========================================== */
+.sound-select-wrapper {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+    margin-left: 8px;
+}
+
+.sound-profile-select {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    padding: 6px 30px 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Outfit', sans-serif;
+    outline: none;
+    appearance: none;
+    transition: all 0.2s ease;
+}
+
+.sound-profile-select:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(30, 41, 59, 0.9);
+}
+
+.sound-select-wrapper::after {
+    content: "▼";
+    font-size: 8px;
+    color: var(--text-muted);
+    position: absolute;
+    right: 12px;
+    pointer-events: none;
+}
+
+/* ==========================================
+   8.8. HISTÓRICO DE AUDITORIA (LOGS ACCORDION)
+   ========================================== */
+.logs-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    margin-top: 24px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.logs-header {
+    padding: 16px 24px;
+    background: rgba(30, 41, 59, 0.3);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.logs-header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: 15px;
+}
+
+.logs-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logs-count-badge {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.logs-toggle-icon {
+    transition: transform 0.2s ease;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.logs-section.open .logs-toggle-icon {
+    transform: rotate(180deg);
+}
+
+.logs-content {
+    display: none;
+    border-top: 1px solid var(--border-color);
+    max-height: 350px;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.logs-section.open .logs-content {
+    display: block;
+}
+
+.logs-table-wrapper {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.logs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    text-align: left;
+}
+
+.logs-table th {
+    background: rgba(15, 23, 42, 0.6);
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 10px 14px;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.logs-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    color: var(--text-secondary);
+}
+
+.logs-table tr:hover td {
+    background: rgba(255, 255, 255, 0.01);
+}
+
+/* Badges coloridos do log de auditoria */
+.log-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.log-badge.log-success {
+    background-color: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+}
+
+.log-badge.log-manual {
+    background-color: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+}
+
+.log-badge.log-error {
+    background-color: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+}
+
+.log-badge.log-info {
+    background-color: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+}
+
+.log-time {
+    font-family: monospace;
+    color: var(--text-muted);
+    font-size: 11.5px;
+}
+
+.logs-btn-group {
+    display: flex;
+    gap: 8px;
+}
+
+.logs-btn {
+    padding: 6px 12px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(30, 41, 59, 0.5);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.logs-btn:hover {
+    background: rgba(30, 41, 59, 0.8);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.logs-btn-primary {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.logs-btn-primary:hover {
+    background: rgba(59, 130, 246, 0.3);
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.logs-empty {
+    padding: 32px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* ==========================================
    9. DESIGN RESPONSIVO PARA CELULAR (MOBILE)
    ========================================== */
 @media (max-width: 768px) {

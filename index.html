@@ -29,6 +29,14 @@
                 <button id="sound-toggle" class="btn btn-icon" title="Ativar/Desativar Som">
                     <span class="icon">🔊</span>
                 </button>
+                <div class="sound-select-wrapper">
+                    <select id="sound-profile-select" class="sound-profile-select" title="Selecionar Perfil Sonoro">
+                        <option value="classic">🔊 Clássico</option>
+                        <option value="retro">🎮 Retro Arcade</option>
+                        <option value="melodic">🔔 Sinos Suaves</option>
+                        <option value="synthwave">🌌 Synthwave</option>
+                    </select>
+                </div>
             </div>
         </header>
 
@@ -148,6 +156,44 @@
                 </div>
             </section>
         </main>
+
+        <!-- Histórico de Auditoria Local -->
+        <section class="logs-section" id="logs-section">
+            <div class="logs-header" id="logs-header">
+                <div class="logs-header-title">
+                    <span>📋</span>
+                    <span>Histórico de Auditoria Local</span>
+                    <span class="logs-count-badge" id="logs-count-badge">0</span>
+                </div>
+                <div class="logs-header-actions">
+                    <div class="logs-btn-group" id="logs-btn-group" style="display: none;">
+                        <button class="logs-btn logs-btn-primary" id="btn-export-logs">📥 Exportar Logs (.csv)</button>
+                        <button class="logs-btn" id="btn-clear-logs">🗑️ Limpar</button>
+                    </div>
+                    <span class="logs-toggle-icon" id="logs-toggle-icon">▼</span>
+                </div>
+            </div>
+            <div class="logs-content" id="logs-content">
+                <div class="logs-table-wrapper">
+                    <table class="logs-table">
+                        <thead>
+                            <tr>
+                                <th>Data/Hora</th>
+                                <th>Nota Fiscal</th>
+                                <th>Ação / Operação</th>
+                                <th>EAN / SKU</th>
+                                <th>Qtd</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-table-body">
+                            <!-- Preenchido dinamicamente via JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="logs-empty" id="logs-empty">Nenhum evento registrado ainda. Carregue um PDF e comece a bipar.</div>
+            </div>
+        </section>
 
         <!-- Toast de Feedback Rápido (Notificação flutuante) -->
         <div id="toast" class="toast">
