@@ -320,6 +320,7 @@ function initElements() {
     // Seletor de Despachante (Aba Expedição)
     elements.activeDespachanteSelect = document.getElementById('active-despachante-select');
     elements.despachanteStatusInfo = document.getElementById('despachante-status-info');
+    elements.expedicaoActiveTimer = document.getElementById('expedicao-active-timer');
 
     // Input de Despachante e Prazo Limite (Aba Administração)
     elements.despachanteNameInput = document.getElementById('despachante-name-input');
@@ -936,6 +937,9 @@ async function checkAllCompleted() {
         
         // Marca o despachante como concluído no banco
         await db.marcarDespachanteConcluido(despachanteId);
+        
+        // Sincroniza o timer ativo para "Concluído"
+        elements.expedicaoActiveTimer.setAttribute('data-concluido', '1');
         
         // Grava o log de fechamento da fila
         const endLog = {
@@ -1798,6 +1802,10 @@ async function loadDespachanteData(id) {
         state.logs = [];
         localStorage.removeItem('expedicao_active_despachante_id');
         
+        // Reset timer ativo
+        elements.expedicaoActiveTimer.setAttribute('data-deadline', '');
+        elements.expedicaoActiveTimer.setAttribute('data-concluido', '0');
+        
         // UI Reset
         elements.readerCard.style.display = 'none';
         elements.progressCard.style.display = 'none';
@@ -1820,6 +1828,10 @@ async function loadDespachanteData(id) {
         state.activeDespachanteNome = despachante.nome;
         localStorage.setItem('expedicao_active_despachante_id', id);
         
+        // Sincroniza timer ativo
+        elements.expedicaoActiveTimer.setAttribute('data-deadline', despachante.data_limite || '');
+        elements.expedicaoActiveTimer.setAttribute('data-concluido', despachante.concluido.toString());
+        
         // Busca itens e logs
         state.items = await db.getItensByDespachante(id);
         state.logs = await db.getLogsByDespachante(id);
@@ -1836,7 +1848,7 @@ async function loadDespachanteData(id) {
         elements.btnCameraScan.disabled = false;
         
         elements.progressCard.style.display = 'block';
-        elements.despachanteStatusInfo.style.display = 'block';
+        elements.despachanteStatusInfo.style.display = 'flex';
         
         // Renderiza
         renderTable();
