@@ -6,8 +6,231 @@
 // Instancia o parser
 const parser = new PdfParser();
 
+// ==========================================
+// BANCO DE DADOS LOCAL (INDEXEDDB RELACIONAL)
+// ==========================================
+class ExpedicaoDB {
+    constructor() {
+        this.dbName = 'ExpedicaoWMS';
+        this.dbVersion = 1;
+        this.db = null;
+    }
+
+    open() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.dbName, this.dbVersion);
+
+            request.onerror = (e) => {
+                console.error('Erro ao abrir IndexedDB:', e);
+                reject(e);
+            };
+
+            request.onsuccess = (e) => {
+                this.db = e.target.result;
+                resolve(this.db);
+            };
+
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+
+                // Tabela Despachantes
+                if (!db.objectStoreNames.contains('despachantes')) {
+                    const despachantesStore = db.createObjectStore('despachantes', { keyPath: 'id', autoIncrement: true });
+                    despachantesStore.createIndex('nome', 'nome', { unique: false });
+                    despachantesStore.createIndex('concluido', 'concluido', { unique: false });
+                }
+
+                // Tabela Itens
+                if (!db.objectStoreNames.contains('itens')) {
+                    const itensStore = db.createObjectStore('itens', { keyPath: 'id', autoIncrement: true });
+                    itensStore.createIndex('despachante_id', 'despachante_id', { unique: false });
+                }
+
+                // Tabela Logs
+                if (!db.objectStoreNames.contains('logs')) {
+                    const logsStore = db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
+                    logsStore.createIndex('despachante_id', 'despachante_id', { unique: false });
+                }
+            };
+        });
+    }
+
+    addDespachante(nome) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['despachantes'], 'readwrite');
+            const store = transaction.objectStore('despachantes');
+            const despachante = {
+                nome: nome,
+                data_criacao: new Date().toISOString(),
+                concluido: false
+            };
+            const request = store.add(despachante);
+            request.onsuccess = (e) => resolve(e.target.result);
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    getDespachante(id) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['despachantes'], 'readonly');
+            const store = transaction.objectStore('despachantes');
+            const request = store.get(id);
+            request.onsuccess = (e) => resolve(e.target.result);
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    getDespachantesAtivos() {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['despachantes'], 'readonly');
+            const store = transaction.objectStore('despachantes');
+            const index = store.index('concluido');
+            const request = index.getAll(false);
+            request.onsuccess = (e) => {
+                const list = e.target.result || [];
+                list.sort((a,b) => new Date(b.data_criacao) - new Date(a.data_criacao));
+                resolve(list);
+            };
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    marcarDespachanteConcluido(id) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['despachantes'], 'readwrite');
+            const store = transaction.objectStore('despachantes');
+            const getReq = store.get(id);
+            getReq.onsuccess = () => {
+                const despachante = getReq.result;
+                if (despachante) {
+                    despachante.concluido = true;
+                    const putReq = store.put(despachante);
+                    putReq.onsuccess = () => resolve(true);
+                    putReq.onerror = (e) => reject(e);
+                } else {
+                    resolve(false);
+                }
+            };
+            getReq.onerror = (e) => reject(e);
+        });
+    }
+
+    deleteDespachante(id) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['despachantes', 'itens', 'logs'], 'readwrite');
+            
+            transaction.objectStore('despachantes').delete(id);
+            
+            const itensStore = transaction.objectStore('itens');
+            const itensIndex = itensStore.index('despachante_id');
+            const getItensReq = itensIndex.openCursor(IDBKeyRange.only(id));
+            getItensReq.onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    cursor.delete();
+                    cursor.continue();
+                }
+            };
+            
+            const logsStore = transaction.objectStore('logs');
+            const logsIndex = logsStore.index('despachante_id');
+            const getLogsReq = logsIndex.openCursor(IDBKeyRange.only(id));
+            getLogsReq.onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    cursor.delete();
+                    cursor.continue();
+                }
+            };
+
+            transaction.oncomplete = () => resolve(true);
+            transaction.onerror = (e) => reject(e);
+        });
+    }
+
+    saveItens(itens, despachanteId) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['itens'], 'readwrite');
+            const store = transaction.objectStore('itens');
+            
+            itens.forEach(item => {
+                const itemDb = {
+                    despachante_id: despachanteId,
+                    nota: item.nota,
+                    ec: item.ec,
+                    cliente: item.cliente,
+                    canal: item.canal,
+                    descricao: item.descricao,
+                    sku: item.sku,
+                    ean: item.ean,
+                    temEan: item.temEan,
+                    quantidade: item.quantidade,
+                    quantidadeOriginal: item.quantidadeOriginal,
+                    expedido: item.expedido,
+                    dataExpedicao: item.dataExpedicao || null
+                };
+                store.add(itemDb);
+            });
+
+            transaction.oncomplete = () => resolve(true);
+            transaction.onerror = (e) => reject(e);
+        });
+    }
+
+    getItensByDespachante(despachanteId) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['itens'], 'readonly');
+            const store = transaction.objectStore('itens');
+            const index = store.index('despachante_id');
+            const request = index.getAll(IDBKeyRange.only(despachanteId));
+            request.onsuccess = (e) => resolve(e.target.result || []);
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    updateItem(item) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['itens'], 'readwrite');
+            const store = transaction.objectStore('itens');
+            const request = store.put(item);
+            request.onsuccess = () => resolve(true);
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    addLog(logEntry) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['logs'], 'readwrite');
+            const store = transaction.objectStore('logs');
+            const request = store.add(logEntry);
+            request.onsuccess = () => resolve(true);
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    getLogsByDespachante(despachanteId) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['logs'], 'readonly');
+            const store = transaction.objectStore('logs');
+            const index = store.index('despachante_id');
+            const request = index.getAll(IDBKeyRange.only(despachanteId));
+            request.onsuccess = (e) => {
+                const list = e.target.result || [];
+                list.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+                resolve(list);
+            };
+            request.onerror = (e) => reject(e);
+        });
+    }
+}
+
+// Inicializa a instância do banco de dados
+const db = new ExpedicaoDB();
+
 // Estado Global da SPA
 const state = {
+    activeTab: 'expedicao', // 'expedicao', 'administracao'
+    activeDespachanteId: null,
     items: [],
     filter: 'all', // 'all', 'pending', 'completed'
     soundEnabled: true,
@@ -73,10 +296,21 @@ function initElements() {
     // Perfil Sonoro
     elements.soundProfileSelect = document.getElementById('sound-profile-select');
 
-    // Elementos de Logs de Auditoria
-    elements.logsSection = document.getElementById('logs-section');
-    elements.logsHeader = document.getElementById('logs-header');
-    elements.logsContent = document.getElementById('logs-content');
+    // Navegação de Abas
+    elements.tabBtnExpedicao = document.getElementById('tab-btn-expedicao');
+    elements.tabBtnAdministracao = document.getElementById('tab-btn-administracao');
+    elements.tabContentExpedicao = document.getElementById('tab-content-expedicao');
+    elements.tabContentAdministracao = document.getElementById('tab-content-administracao');
+
+    // Seletor de Despachante (Aba Expedição)
+    elements.activeDespachanteSelect = document.getElementById('active-despachante-select');
+    elements.despachanteStatusInfo = document.getElementById('despachante-status-info');
+
+    // Input de Despachante (Aba Administração)
+    elements.despachanteNameInput = document.getElementById('despachante-name-input');
+    elements.btnLoadTest = document.getElementById('btn-load-test');
+
+    // Logs de Auditoria
     elements.logsCountBadge = document.getElementById('logs-count-badge');
     elements.logsBtnGroup = document.getElementById('logs-btn-group');
     elements.btnExportLogs = document.getElementById('btn-export-logs');
@@ -90,10 +324,16 @@ function initElements() {
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     initElements();
-    loadSettings();
-    initEventListeners();
-    restoreStateFromStorage();
-    setupAutofocus();
+    
+    db.open().then(() => {
+        loadSettings();
+        initEventListeners();
+        restoreStateFromStorage();
+        setupAutofocus();
+    }).catch(err => {
+        console.error('Falha critica ao iniciar banco de dados IndexedDB:', err);
+        showToast('Erro de Inicialização', 'O banco de dados do armazém falhou ao abrir.', 'error');
+    });
 });
 
 // Carrega configurações de tema e som salvas
@@ -129,42 +369,10 @@ function updateSoundButtonIcon() {
     elements.soundToggle.querySelector('.icon').textContent = state.soundEnabled ? '🔊' : '🔇';
 }
 
-// Restaura os itens do LocalStorage se existirem
+// Restaura a aba e o despachante ativo a partir do banco e do LocalStorage
 function restoreStateFromStorage() {
-    // Restaura logs de auditoria
-    const savedLogs = localStorage.getItem('expedicao_logs');
-    if (savedLogs) {
-        try {
-            state.logs = JSON.parse(savedLogs);
-            renderLogs();
-        } catch (e) {
-            console.error('Erro ao restaurar logs de auditoria:', e);
-        }
-    }
-
-    const savedItems = localStorage.getItem('expedicao_items');
-    if (savedItems) {
-        try {
-            state.items = JSON.parse(savedItems);
-            if (state.items.length > 0) {
-                // Recupera nome do PDF original
-                state.pdfName = localStorage.getItem('expedicao_pdf_name');
-                if (state.pdfName === 'teste.pdf') {
-                    // Pré-carrega teste.pdf em background
-                    fetch('./teste.pdf')
-                        .then(res => res.blob())
-                        .then(blob => {
-                            state.pdfBlob = new File([blob], 'teste.pdf', { type: 'application/pdf' });
-                        })
-                        .catch(err => console.error('Erro ao pre-carregar teste.pdf:', err));
-                }
-                onDataLoaded();
-            }
-        } catch (e) {
-            console.error('Erro ao restaurar dados do LocalStorage:', e);
-            localStorage.removeItem('expedicao_items');
-        }
-    }
+    const savedTab = localStorage.getItem('expedicao_active_tab') || 'expedicao';
+    switchTab(savedTab);
 }
 
 // Configura o foco inicial no campo de SKU
@@ -179,6 +387,14 @@ function setupAutofocus() {
 // 2. CONFIGURAÇÃO DE EVENTOS (LISTENERS)
 // ==========================================
 function initEventListeners() {
+    // Chaveamento de Abas
+    if (elements.tabBtnExpedicao) {
+        elements.tabBtnExpedicao.addEventListener('click', () => switchTab('expedicao'));
+    }
+    if (elements.tabBtnAdministracao) {
+        elements.tabBtnAdministracao.addEventListener('click', () => switchTab('administracao'));
+    }
+
     // Alternância de Tema
     elements.themeToggle.addEventListener('click', () => {
         if (state.theme === 'dark') {
@@ -215,10 +431,42 @@ function initEventListeners() {
         });
     }
 
+    // Monitora nome do despachante para habilitar área de upload
+    if (elements.despachanteNameInput) {
+        elements.despachanteNameInput.addEventListener('input', (e) => {
+            const val = e.target.value.trim();
+            const hasName = val.length >= 2;
+            
+            if (hasName) {
+                elements.dropArea.classList.remove('disabled-card');
+                elements.dropArea.style.opacity = '1';
+                elements.dropArea.style.pointerEvents = 'auto';
+                elements.fileInput.disabled = false;
+                elements.btnLoadTest.disabled = false;
+            } else {
+                elements.dropArea.classList.add('disabled-card');
+                elements.dropArea.style.opacity = '0.5';
+                elements.dropArea.style.pointerEvents = 'none';
+                elements.fileInput.disabled = true;
+                elements.btnLoadTest.disabled = true;
+            }
+        });
+    }
+
+    // Seleção de Despachante Ativo no Dropdown
+    if (elements.activeDespachanteSelect) {
+        elements.activeDespachanteSelect.addEventListener('change', (e) => {
+            const id = e.target.value ? parseInt(e.target.value, 10) : null;
+            loadDespachanteData(id);
+        });
+    }
+
     // Drag and Drop do PDF
     elements.dropArea.addEventListener('dragover', (e) => {
         e.preventDefault();
-        elements.dropArea.classList.add('highlight');
+        if (!elements.fileInput.disabled) {
+            elements.dropArea.classList.add('highlight');
+        }
     });
 
     elements.dropArea.addEventListener('dragleave', () => {
@@ -228,6 +476,8 @@ function initEventListeners() {
     elements.dropArea.addEventListener('drop', (e) => {
         e.preventDefault();
         elements.dropArea.classList.remove('highlight');
+        if (elements.fileInput.disabled) return;
+        
         const files = e.dataTransfer.files;
         if (files.length > 0 && files[0].type === 'application/pdf') {
             handlePdfFile(files[0]);
@@ -237,7 +487,9 @@ function initEventListeners() {
     });
 
     elements.dropArea.addEventListener('click', () => {
-        elements.fileInput.click();
+        if (!elements.fileInput.disabled) {
+            elements.fileInput.click();
+        }
     });
 
     elements.fileInput.addEventListener('change', (e) => {
@@ -245,6 +497,11 @@ function initEventListeners() {
             handlePdfFile(e.target.files[0]);
         }
     });
+
+    // Botão de Modelo de Teste
+    if (elements.btnLoadTest) {
+        elements.btnLoadTest.addEventListener('click', loadLocalTestPdf);
+    }
 
     // Form de Leitura de SKU
     elements.barcodeForm.addEventListener('submit', (e) => {
@@ -275,10 +532,11 @@ function initEventListeners() {
     elements.btnCameraScan.addEventListener('click', startCameraScanner);
     elements.btnStopCamera.addEventListener('click', stopCameraScanner);
 
-    // Limpar expedição
+    // Limpar/Excluir despachante ativo
     elements.btnReset.addEventListener('click', () => {
-        if (confirm('Tem certeza que deseja limpar a expedição atual? Todos os dados de conferência serão perdidos.')) {
-            resetState();
+        if (!state.activeDespachanteId) return;
+        if (confirm(`Tem certeza que deseja deletar permanentemente o despachante "${state.activeDespachanteNome}" e todos os seus itens do banco local?`)) {
+            deleteActiveDespachante();
         }
     });
 
@@ -300,7 +558,7 @@ function initEventListeners() {
         elements.btnConfirmNoEanNo.addEventListener('click', confirmNoEanNo);
     }
 
-    // Atalhos de teclado globais (ex: Enter ou Espaço para fechar modal de erro/confirmar)
+    // Atalhos de teclado globais
     document.addEventListener('keydown', (e) => {
         if (state.errorModalActive) {
             if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
@@ -317,14 +575,6 @@ function initEventListeners() {
             }
         }
     });
-
-    // Eventos do Painel de Auditoria Local
-    if (elements.logsHeader) {
-        elements.logsHeader.addEventListener('click', (e) => {
-            if (e.target.closest('.logs-btn')) return;
-            elements.logsSection.classList.toggle('open');
-        });
-    }
 
     if (elements.btnExportLogs) {
         elements.btnExportLogs.addEventListener('click', exportLogsToCsv);
@@ -357,8 +607,14 @@ async function loadLocalTestPdf() {
     }
 }
 
-// Processa o arquivo PDF carregado
+// Processa o arquivo PDF carregado e vincula ao despachante no banco de dados
 async function handlePdfFile(file) {
+    const despachanteNome = elements.despachanteNameInput.value.trim();
+    if (!despachanteNome) {
+        showToast('Despachante Requerido', 'Por favor, insira o nome do despachante responsável.', 'error');
+        return;
+    }
+
     showLoadingState(true);
     try {
         const reader = new FileReader();
@@ -372,20 +628,44 @@ async function handlePdfFile(file) {
                     return;
                 }
                 
-                // Salva os itens no estado
-                state.items = parsedItems;
-                localStorage.setItem('expedicao_items', JSON.stringify(state.items));
+                // Cria despachante no IndexedDB
+                const despachanteId = await db.addDespachante(despachanteNome);
                 
-                // Armazena dados do arquivo PDF
-                state.pdfBlob = file;
-                state.pdfName = file.name;
-                localStorage.setItem('expedicao_pdf_name', file.name);
+                // Vincula os itens do PDF a esse despachante
+                await db.saveItens(parsedItems, despachanteId);
                 
-                onDataLoaded();
+                // Grava o log de importação vinculando a esse despachante
+                const logEntry = {
+                    despachante_id: despachanteId,
+                    timestamp: new Date().toISOString(),
+                    nota: '---',
+                    ean: file.name,
+                    quantidade: parsedItems.length,
+                    acao: 'Importação PDF',
+                    tipo: 'info'
+                };
+                await db.addLog(logEntry);
+                
+                showLoadingState(false);
                 playSoundEffect('confirm');
-                addLog('Importação PDF', '---', file.name, state.items.length, 'info');
+                showToast('Importado com Sucesso', `${parsedItems.length} itens vinculados ao despachante: ${despachanteNome}`, 'success');
                 
-                showToast('Sucesso', `${state.items.length} itens extraídos do PDF com sucesso!`, 'success');
+                // Limpa o input do despachante e dispara evento para desabilitar o upload
+                elements.despachanteNameInput.value = '';
+                elements.despachanteNameInput.dispatchEvent(new Event('input'));
+                
+                // Pergunta se deseja chavear para a aba de expedição
+                if (confirm(`Lista importada com sucesso para o despachante "${despachanteNome}". Deseja ir para a aba de Expedição de Vendas?`)) {
+                    switchTab('expedicao');
+                    
+                    // Seleciona automaticamente o despachante recém-criado
+                    setTimeout(() => {
+                        elements.activeDespachanteSelect.value = despachanteId;
+                        elements.activeDespachanteSelect.dispatchEvent(new Event('change'));
+                    }, 150);
+                } else {
+                    renderLogs();
+                }
             } catch (err) {
                 showToast('Erro de Parsing', err.message, 'error');
                 showLoadingState(false);
@@ -450,7 +730,12 @@ function onDataLoaded() {
  * e diminui a contagem restante (suporta leitura em lote com o formato Qtd*EAN).
  * @param {string} rawSku Código lido pelo scanner
  */
-function processBarcodeRead(rawSku) {
+async function processBarcodeRead(rawSku) {
+    if (!state.activeDespachanteId) {
+        showToast('Nenhuma Lista Selecionada', 'Selecione uma lista de despachante ativo no topo da tela.', 'error');
+        return;
+    }
+
     let multiplier = 1;
     let code = rawSku.trim().toUpperCase();
     
@@ -490,13 +775,25 @@ function processBarcodeRead(rawSku) {
             matchedItem.dataExpedicao = new Date().toISOString();
         }
         
-        localStorage.setItem('expedicao_items', JSON.stringify(state.items));
+        // Atualiza item no IndexedDB
+        await db.updateItem(matchedItem);
         renderTable();
         updateProgress();
         highlightRow(matchedItem.id);
         
-        // Grava log de auditoria
-        addLog('Conferência Bip', matchedItem.nota, matchedItem.ean, unidadesParaExpedir, 'success');
+        // Grava log de auditoria no IndexedDB
+        const logEntry = {
+            despachante_id: state.activeDespachanteId,
+            timestamp: new Date().toISOString(),
+            nota: matchedItem.nota,
+            ean: matchedItem.ean || matchedItem.sku,
+            quantidade: unidadesParaExpedir,
+            acao: 'Conferência Bip',
+            tipo: 'success'
+        };
+        await db.addLog(logEntry);
+        state.logs = await db.getLogsByDespachante(state.activeDespachanteId);
+        renderLogs();
         
         // Feedback Sonoro e Visual
         if (matchedItem.expedido) {
@@ -524,7 +821,18 @@ function processBarcodeRead(rawSku) {
         playSoundEffect('error');
         
         if (alreadyExpedidos.length > 0) {
-            addLog('Erro: Já Expedido', '---', code, multiplier, 'error');
+            const errLog = {
+                despachante_id: state.activeDespachanteId,
+                timestamp: new Date().toISOString(),
+                nota: '---',
+                ean: code,
+                quantidade: multiplier,
+                acao: 'Erro: Já Expedido',
+                tipo: 'error'
+            };
+            await db.addLog(errLog);
+            state.logs = await db.getLogsByDespachante(state.activeDespachanteId);
+            renderLogs();
             showErrorModal('Produto Já Expedido', 'Este produto já foi totalmente processado e expedido nesta lista.', code);
         } else {
             const pendentesSemEan = state.items.filter(item => !item.expedido && !item.temEan);
@@ -538,7 +846,18 @@ function processBarcodeRead(rawSku) {
             } else if (isEanLike && pendentesSemEan.length > 0) {
                 showNoEanConfirmModal(pendentesSemEan[0]);
             } else {
-                addLog('Erro: Não Encontrado', '---', code, multiplier, 'error');
+                const errLog = {
+                    despachante_id: state.activeDespachanteId,
+                    timestamp: new Date().toISOString(),
+                    nota: '---',
+                    ean: code,
+                    quantidade: multiplier,
+                    acao: 'Erro: Não Encontrado',
+                    tipo: 'error'
+                };
+                await db.addLog(errLog);
+                state.logs = await db.getLogsByDespachante(state.activeDespachanteId);
+                renderLogs();
                 showErrorModal('Código Não Encontrado', 'O código lido não foi encontrado na lista de pendentes.', code);
             }
         }
@@ -568,11 +887,40 @@ function triggerInputErrorEffect() {
 }
 
 // Verifica se toda a lista de expedição foi concluída
-function checkAllCompleted() {
+async function checkAllCompleted() {
     const totalPendentes = state.items.reduce((acc, item) => acc + item.quantidade, 0);
     if (totalPendentes === 0 && state.items.length > 0) {
+        const despachanteId = state.activeDespachanteId;
+        const despachanteNome = state.activeDespachanteNome;
+        
+        // Marca o despachante como concluído no banco
+        await db.marcarDespachanteConcluido(despachanteId);
+        
+        // Grava o log de fechamento da fila
+        const endLog = {
+            despachante_id: despachanteId,
+            timestamp: new Date().toISOString(),
+            nota: '---',
+            ean: '---',
+            quantidade: state.items.length,
+            acao: 'Finalização de Lista',
+            tipo: 'success'
+        };
+        await db.addLog(endLog);
+        
         playSoundEffect('all_complete');
         showToast('Expedição Finalizada! 🎉', 'Parabéns! Todos os produtos da lista foram conferidos e expedidos.', 'success');
+        
+        // Aguarda 1 segundo para visualização do estado concluído antes da ação
+        setTimeout(() => {
+            if (confirm(`Lista de itens finalizada para o despachante "${despachanteNome}". Deseja exportar o resumo da auditoria em CSV?`)) {
+                exportLogsToCsv();
+            }
+            
+            // Reseta tela operacional e recarrega dropdown de despachantes
+            loadDespachanteData(null);
+            loadDespachantesDropdown();
+        }, 1000);
     }
 }
 
@@ -832,7 +1180,7 @@ function renderTable() {
  * Muito útil para operadores em contingência.
  * @param {number} id Id do item
  */
-window.manualAddUnit = function(id) {
+window.manualAddUnit = async function(id) {
     const item = state.items.find(i => i.id === id);
     if (item && !item.expedido) {
         // Registra a unidade expedida
@@ -843,13 +1191,25 @@ window.manualAddUnit = function(id) {
             item.dataExpedicao = new Date().toISOString();
         }
         
-        localStorage.setItem('expedicao_items', JSON.stringify(state.items));
+        // Atualiza item no IndexedDB
+        await db.updateItem(item);
         renderTable();
         updateProgress();
         highlightRow(item.id);
         
-        // Adiciona log de auditoria
-        addLog('Conferência Manual', item.nota, item.ean || item.sku, 1, 'manual');
+        // Adiciona log de auditoria no IndexedDB
+        const logEntry = {
+            despachante_id: state.activeDespachanteId,
+            timestamp: new Date().toISOString(),
+            nota: item.nota,
+            ean: item.ean || item.sku,
+            quantidade: 1,
+            acao: 'Conferência Manual',
+            tipo: 'manual'
+        };
+        await db.addLog(logEntry);
+        state.logs = await db.getLogsByDespachante(state.activeDespachanteId);
+        renderLogs();
         
         if (item.expedido) {
             playSoundEffect('complete');
@@ -1100,7 +1460,7 @@ function showNoEanConfirmModal(item) {
     }, 100);
 }
 
-function confirmNoEanYes() {
+async function confirmNoEanYes() {
     const item = state.confirmTargetItem;
     elements.noEanConfirmModal.style.display = 'none';
     state.confirmModalActive = false;
@@ -1115,13 +1475,25 @@ function confirmNoEanYes() {
             item.dataExpedicao = new Date().toISOString();
         }
         
-        localStorage.setItem('expedicao_items', JSON.stringify(state.items));
+        // Atualiza item no IndexedDB
+        await db.updateItem(item);
         renderTable();
         updateProgress();
         highlightRow(item.id);
         
-        // Grava log de auditoria
-        addLog('Conferência Sem EAN', item.nota, item.sku, 1, 'manual');
+        // Grava log de auditoria no IndexedDB
+        const logEntry = {
+            despachante_id: state.activeDespachanteId,
+            timestamp: new Date().toISOString(),
+            nota: item.nota,
+            ean: item.sku,
+            quantidade: 1,
+            acao: 'Conferência Sem EAN',
+            tipo: 'manual'
+        };
+        await db.addLog(logEntry);
+        state.logs = await db.getLogsByDespachante(state.activeDespachanteId);
+        renderLogs();
         
         if (item.expedido) {
             playSoundEffect('complete');
@@ -1136,7 +1508,7 @@ function confirmNoEanYes() {
     restoreActiveScanner();
 }
 
-function confirmNoEanNo() {
+async function confirmNoEanNo() {
     const item = state.confirmTargetItem;
     elements.noEanConfirmModal.style.display = 'none';
     state.confirmModalActive = false;
@@ -1146,7 +1518,19 @@ function confirmNoEanNo() {
     playSoundEffect('cancel');
     
     if (item) {
-        addLog('Cancelado Sem EAN', item.nota, item.sku, 1, 'info');
+        // Grava log de auditoria no IndexedDB
+        const logEntry = {
+            despachante_id: state.activeDespachanteId,
+            timestamp: new Date().toISOString(),
+            nota: item.nota,
+            ean: item.sku,
+            quantidade: 1,
+            acao: 'Cancelado Sem EAN',
+            tipo: 'info'
+        };
+        await db.addLog(logEntry);
+        state.logs = await db.getLogsByDespachante(state.activeDespachanteId);
+        renderLogs();
     }
     
     restoreActiveScanner();
@@ -1168,27 +1552,6 @@ function restoreActiveScanner() {
 // ==========================================
 // 8.9. LÓGICA DE AUDITORIA E LOGS LOCAIS
 // ==========================================
-function addLog(action, note, ean, qty, type = 'info') {
-    const logEntry = {
-        timestamp: new Date().toISOString(),
-        nota: note || '---',
-        ean: ean || '---',
-        quantidade: qty || 0,
-        acao: action,
-        tipo: type
-    };
-    
-    state.logs.unshift(logEntry);
-    
-    // Limita tamanho do histórico local para não estourar LocalStorage
-    if (state.logs.length > 500) {
-        state.logs.pop();
-    }
-    
-    localStorage.setItem('expedicao_logs', JSON.stringify(state.logs));
-    renderLogs();
-}
-
 function renderLogs() {
     if (!elements.logsTableBody) return;
     
@@ -1244,14 +1607,35 @@ function renderLogs() {
     });
 }
 
-// Limpa o log local
-function clearLogs() {
-    if (confirm('Deseja realmente esvaziar todo o histórico de auditoria local? Esta ação não pode ser desfeita.')) {
-        state.logs = [];
-        localStorage.removeItem('expedicao_logs');
-        renderLogs();
-        showToast('Auditoria Limpa', 'Histórico local foi redefinido.', 'success');
-        playSoundEffect('cancel');
+// Limpa os logs do despachante ativo no IndexedDB
+async function clearLogs() {
+    if (!state.activeDespachanteId) return;
+    if (confirm('Deseja realmente esvaziar todo o histórico de auditoria deste despachante?')) {
+        try {
+            const transaction = db.db.transaction(['logs'], 'readwrite');
+            const store = transaction.objectStore('logs');
+            const index = store.index('despachante_id');
+            const range = IDBKeyRange.only(state.activeDespachanteId);
+            
+            const getLogsReq = index.openCursor(range);
+            getLogsReq.onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    cursor.delete();
+                    cursor.continue();
+                }
+            };
+            
+            transaction.oncomplete = () => {
+                state.logs = [];
+                renderLogs();
+                showToast('Auditoria Limpa', 'Histórico do despachante foi redefinido.', 'success');
+                playSoundEffect('cancel');
+            };
+        } catch (err) {
+            console.error('Falha ao limpar logs no IndexedDB:', err);
+            showToast('Erro ao Limpar', 'Não foi possível apagar os logs do banco local.', 'error');
+        }
     }
 }
 
@@ -1300,4 +1684,146 @@ function exportLogsToCsv() {
     
     showToast('Logs Exportados', 'Relatório CSV de auditoria baixado com sucesso!', 'success');
     playSoundEffect('confirm');
+}
+
+// ==========================================
+// 8.10. CONTROLADORES DE ABAS E DESPACHANTES
+// ==========================================
+
+// Alterna entre as abas e atualiza a interface
+function switchTab(tab) {
+    state.activeTab = tab;
+    localStorage.setItem('expedicao_active_tab', tab);
+    
+    if (tab === 'expedicao') {
+        elements.tabBtnExpedicao.classList.add('active');
+        elements.tabBtnAdministracao.classList.remove('active');
+        elements.tabContentExpedicao.classList.add('active');
+        elements.tabContentAdministracao.classList.remove('active');
+        
+        loadDespachantesDropdown();
+    } else {
+        elements.tabBtnExpedicao.classList.remove('active');
+        elements.tabBtnAdministracao.classList.add('active');
+        elements.tabContentExpedicao.classList.remove('active');
+        elements.tabContentAdministracao.classList.add('active');
+        
+        stopCameraScanner();
+        renderLogs();
+    }
+}
+
+// Alimenta o dropdown com a lista de despachantes ativos do banco
+async function loadDespachantesDropdown(selectedId = null) {
+    if (!elements.activeDespachanteSelect) return;
+    
+    elements.activeDespachanteSelect.innerHTML = '<option value="">-- Selecione uma lista de despachante --</option>';
+    
+    try {
+        const despachantes = await db.getDespachantesAtivos();
+        
+        despachantes.forEach(d => {
+            const dateStr = new Date(d.data_criacao).toLocaleDateString('pt-BR');
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = `${d.nome} (${dateStr})`;
+            elements.activeDespachanteSelect.appendChild(opt);
+        });
+        
+        // Se houver um ID ativo salvo ou fornecido, define-o como selecionado
+        const idToSet = selectedId || state.activeDespachanteId || parseInt(localStorage.getItem('expedicao_active_despachante_id'), 10);
+        if (idToSet && despachantes.some(d => d.id === idToSet)) {
+            elements.activeDespachanteSelect.value = idToSet;
+            if (!selectedId) {
+                // Carrega os dados silenciosamente
+                loadDespachanteData(idToSet);
+            }
+        } else if (!despachantes.some(d => d.id === state.activeDespachanteId)) {
+            // Se o despachante ativo sumiu ou foi apagado
+            loadDespachanteData(null);
+        }
+    } catch (e) {
+        console.error('Erro ao ler despachantes do IndexedDB:', e);
+    }
+}
+
+// Carrega os itens e histórico vinculados ao despachante selecionado
+async function loadDespachanteData(id) {
+    if (!id) {
+        state.activeDespachanteId = null;
+        state.activeDespachanteNome = null;
+        state.items = [];
+        state.logs = [];
+        localStorage.removeItem('expedicao_active_despachante_id');
+        
+        // UI Reset
+        elements.readerCard.style.display = 'none';
+        elements.progressCard.style.display = 'none';
+        elements.emptyState.style.display = 'flex';
+        elements.tableContainer.style.display = 'none';
+        elements.despachanteStatusInfo.style.display = 'none';
+        
+        stopCameraScanner();
+        return;
+    }
+    
+    try {
+        const despachante = await db.getDespachante(id);
+        if (!despachante) {
+            loadDespachanteData(null);
+            return;
+        }
+        
+        state.activeDespachanteId = id;
+        state.activeDespachanteNome = despachante.nome;
+        localStorage.setItem('expedicao_active_despachante_id', id);
+        
+        // Busca itens e logs
+        state.items = await db.getItensByDespachante(id);
+        state.logs = await db.getLogsByDespachante(id);
+        
+        // Habilita e exibe UI
+        elements.emptyState.style.display = 'none';
+        elements.tableContainer.style.display = 'block';
+        
+        elements.readerCard.style.display = 'block';
+        elements.readerCard.classList.remove('disabled-card');
+        elements.barcodeInput.disabled = false;
+        elements.barcodeInput.placeholder = 'Aponte o leitor e escaneie o EAN...';
+        elements.btnSubmitSku.disabled = false;
+        elements.btnCameraScan.disabled = false;
+        
+        elements.progressCard.style.display = 'block';
+        elements.despachanteStatusInfo.style.display = 'block';
+        
+        // Renderiza
+        renderTable();
+        updateProgress();
+        renderLogs();
+        
+        // Foco automático
+        setTimeout(setupAutofocus, 100);
+    } catch (e) {
+        console.error('Erro ao carregar dados do despachante:', e);
+        showToast('Erro de Carregamento', 'Falha ao buscar registros do banco local.', 'error');
+    }
+}
+
+// Exclui o despachante selecionado do banco de dados
+async function deleteActiveDespachante() {
+    const id = state.activeDespachanteId;
+    if (!id) return;
+    
+    try {
+        await db.deleteDespachante(id);
+        showToast('Lista Deletada', 'Os dados do despachante foram removidos do banco.', 'success');
+        playSoundEffect('cancel');
+        
+        // Reseta tela
+        loadDespachanteData(null);
+        loadDespachantesDropdown();
+    } catch (e) {
+        console.error('Falha ao excluir despachante:', e);
+        showToast('Erro ao Excluir', 'Não foi possível apagar os dados do banco local.', 'error');
+    }
 }

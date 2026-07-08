@@ -20,7 +20,10 @@
         <header class="app-header">
             <div class="logo-area">
                 <span class="logo-icon"></span>
-                <h1>Expedição de Vendas</h1>
+                <div class="tabs-nav">
+                    <button class="tab-btn active" id="tab-btn-expedicao" data-tab="expedicao">Expedição de Vendas</button>
+                    <button class="tab-btn" id="tab-btn-administracao" data-tab="administracao">Administração de Vendas</button>
+                </div>
             </div>
             <div class="header-actions">
                 <button id="theme-toggle" class="btn btn-icon" title="Alternar Tema">
@@ -42,158 +45,192 @@
 
         <!-- Main Dashboard -->
         <main class="app-main">
-            <!-- Coluna Esquerda: Controles de Importação e Leitura -->
-            <section class="control-column">
-                <!-- Painel de Importação -->
-                <div class="card glass-card shadow-lg" id="import-card">
-                    <h2 class="card-title">1. Carregar Lista de Vendas</h2>
-                    <p class="card-subtitle">Importe um PDF de separação de mercadorias</p>
-                    
-                    <div class="drag-drop-area" id="drop-area">
-                        <span class="upload-icon">📥</span>
-                        <p class="upload-text">Arraste o PDF aqui ou clique para selecionar</p>
+            <!-- ABA 1: EXPEDIÇÃO DE VENDAS -->
+            <div class="tab-content active" id="tab-content-expedicao" style="width: 100%;">
+                <!-- Card de Seleção de Despachante -->
+                <div class="despachante-select-card glass-card">
+                    <div class="despachante-select-wrapper">
+                        <label for="active-despachante-select">📋 Lista / Despachante Ativo:</label>
+                        <select id="active-despachante-select" class="despachante-select">
+                            <option value="">-- Selecione uma lista de despachante --</option>
+                        </select>
                     </div>
-                    <input type="file" id="pdf-file-input" accept="application/pdf" style="display: none;">
-                    
-
-                </div>
-
-                <!-- Painel de Leitor de SKU -->
-                <div class="card glass-card shadow-lg" id="reader-card" style="display: none;">
-                    <h2 class="card-title">2. Conferir Produto</h2>
-                    <p class="card-subtitle">Escaneie o código de barras (EAN) do produto</p>
-                    
-                    <form id="barcode-form" class="barcode-input-wrapper">
-                        <input type="text" id="barcode-input" placeholder="Aguardando leitura de EAN..." autocomplete="off" disabled>
-                        <button type="submit" class="btn btn-primary" id="btn-submit-sku" disabled>Conferir</button>
-                    </form>
-                    
-                    <div class="reader-options">
-                        <button id="btn-camera-scan" class="btn btn-outline w-full" disabled>
-                            📷 Escanear com Câmera
-                        </button>
-                        <div class="autofocus-indicator">
-                            <span class="pulse-dot"></span> Foco automático do leitor ativo
-                        </div>
-                    </div>
-
-                </div>
-
-                <!-- Resumo e Progresso -->
-                <div class="card glass-card shadow-lg" id="progress-card" style="display: none;">
-                    <h2 class="card-title">Progresso Geral</h2>
-                    <div class="progress-details">
-                        <div class="progress-bar-container">
-                            <div class="progress-bar" id="overall-progress-bar" style="width: 0%;"></div>
-                        </div>
-                        <div class="progress-text-row">
-                            <span id="progress-percentage">0%</span>
-                            <span id="progress-count">0 / 0 itens</span>
-                        </div>
-                    </div>
-                    
-                    <div class="stats-grid">
-                        <div class="stat-box">
-                            <span class="stat-val" id="stat-total-pedidos">0</span>
-                            <span class="stat-label">Pedidos</span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-val" id="stat-total-pecas">0</span>
-                            <span class="stat-label">Peças Faltantes</span>
-                        </div>
-                    </div>
-
-                    <button id="btn-view-pdf" class="btn btn-secondary w-full mt-4">
-                        📄 Visualizar PDF Original
-                    </button>
-                    <button id="btn-reset" class="btn btn-danger-outline w-full mt-2">
-                        🗑 Limpar Expedição Atual
-                    </button>
-                </div>
-            </section>
-
-            <!-- Coluna Direita: Fila de Itens e Histórico -->
-            <section class="list-column" id="list-column" style="display: none;">
-                <!-- Lista de Itens -->
-                <div class="card glass-card shadow-lg flex-1 flex flex-col" id="items-card">
-                    <div class="card-header-row">
-                        <h2 class="card-title">Itens em Espera (Fila de Expedição)</h2>
-                        <div class="filter-group">
-                            <button class="btn btn-tab active" data-filter="all">Todos</button>
-                            <button class="btn btn-tab" data-filter="pending">Pendentes</button>
-                            <button class="btn btn-tab" data-filter="completed">Expedidos</button>
-                        </div>
-                    </div>
-                    
-                    <div class="search-box-wrapper">
-                        <input type="text" id="search-input" placeholder="Buscar por SKU, descrição ou cliente..." autocomplete="off">
-                    </div>
-
-                    <!-- Fila Vazia -->
-                    <div class="empty-state" id="empty-state">
-                        <span class="empty-icon">📋</span>
-                        <h3>Nenhuma lista carregada</h3>
-                        <p>Importe o PDF de separação ou clique em "Carregar Modelo de Teste" para começar.</p>
-                    </div>
-
-                    <!-- Tabela de Itens (Oculta por padrão) -->
-                    <div class="table-container scrollable" id="table-container" style="display: none;">
-                        <table class="items-table">
-                            <thead>
-                                <tr>
-                                    <th>Status</th>
-                                    <th>Nota / Cliente</th>
-                                    <th>Produto / Descrição</th>
-                                    <th>SKU</th>
-                                    <th class="text-center">Restante / Total</th>
-                                </tr>
-                            </thead>
-                            <tbody id="items-table-body">
-                                <!-- Preenchido dinamicamente via JS -->
-                            </tbody>
-                        </table>
+                    <div class="despachante-status-info" id="despachante-status-info" style="display: none;">
+                        <span class="badge badge-pending">Em Expedição</span>
                     </div>
                 </div>
-            </section>
+
+                <!-- Painel Operacional Lateralizado (Duas Colunas) -->
+                <div class="dashboard-columns" style="display: flex; gap: 20px; width: 100%;">
+                    <!-- Coluna Esquerda: Leitor e Progresso -->
+                    <section class="control-column" style="flex: 1; max-width: 420px; display: flex; flex-direction: column; gap: 20px;">
+                        <!-- Painel de Leitor de SKU -->
+                        <div class="card glass-card shadow-lg" id="reader-card" style="display: none;">
+                            <h2 class="card-title">2. Conferir Produto</h2>
+                            <p class="card-subtitle">Escaneie o código de barras (EAN) do produto</p>
+                            
+                            <form id="barcode-form" class="barcode-input-wrapper">
+                                <input type="text" id="barcode-input" placeholder="Aguardando leitura de EAN..." autocomplete="off" disabled>
+                                <button type="submit" class="btn btn-primary" id="btn-submit-sku" disabled>Conferir</button>
+                            </form>
+                            
+                            <div class="reader-options">
+                                <button id="btn-camera-scan" class="btn btn-outline w-full" disabled>
+                                    📷 Escanear com Câmera
+                                </button>
+                                <div class="autofocus-indicator">
+                                    <span class="pulse-dot"></span> Foco automático do leitor ativo
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resumo e Progresso -->
+                        <div class="card glass-card shadow-lg" id="progress-card" style="display: none;">
+                            <h2 class="card-title">Progresso Geral</h2>
+                            <div class="progress-details">
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar" id="overall-progress-bar" style="width: 0%;"></div>
+                                </div>
+                                <div class="progress-text-row">
+                                    <span id="progress-percentage">0%</span>
+                                    <span id="progress-count">0 / 0 itens</span>
+                                </div>
+                            </div>
+                            
+                            <div class="stats-grid">
+                                <div class="stat-box">
+                                    <span class="stat-val" id="stat-total-pedidos">0</span>
+                                    <span class="stat-label">Pedidos</span>
+                                </div>
+                                <div class="stat-box">
+                                    <span class="stat-val" id="stat-total-pecas">0</span>
+                                    <span class="stat-label">Peças Faltantes</span>
+                                </div>
+                            </div>
+
+                            <button id="btn-view-pdf" class="btn btn-secondary w-full mt-4">
+                                📄 Visualizar PDF Original
+                            </button>
+                            <button id="btn-reset" class="btn btn-danger-outline w-full mt-2">
+                                🗑 Excluir Lista Atual
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- Coluna Direita: Fila de Itens -->
+                    <section class="list-column" id="list-column" style="flex: 2; display: flex; flex-direction: column;">
+                        <!-- Lista de Itens -->
+                        <div class="card glass-card shadow-lg flex-1 flex flex-col" id="items-card" style="height: 100%;">
+                            <div class="card-header-row">
+                                <h2 class="card-title">Itens em Espera (Fila de Expedição)</h2>
+                                <div class="filter-group">
+                                    <button class="btn btn-tab active" data-filter="all">Todos</button>
+                                    <button class="btn btn-tab" data-filter="pending">Pendentes</button>
+                                    <button class="btn btn-tab" data-filter="completed">Expedidos</button>
+                                </div>
+                            </div>
+                            
+                            <div class="search-box-wrapper">
+                                <input type="text" id="search-input" placeholder="Buscar por SKU, descrição ou cliente..." autocomplete="off">
+                            </div>
+
+                            <!-- Fila Vazia -->
+                            <div class="empty-state" id="empty-state">
+                                <span class="empty-icon">📋</span>
+                                <h3>Nenhuma lista selecionada</h3>
+                                <p>Escolha um despachante acima ou vá em "Administração" para carregar um novo PDF.</p>
+                            </div>
+
+                            <!-- Tabela de Itens (Oculta por padrão) -->
+                            <div class="table-container scrollable" id="table-container" style="display: none;">
+                                <table class="items-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Status</th>
+                                            <th>Nota / Cliente</th>
+                                            <th>Produto / Descrição</th>
+                                            <th>SKU</th>
+                                            <th class="text-center">Restante / Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="items-table-body">
+                                        <!-- Preenchido dinamicamente via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- ABA 2: ADMINISTRAÇÃO DE VENDAS -->
+            <div class="tab-content" id="tab-content-administracao" style="width: 100%;">
+                <div style="display: flex; gap: 20px; width: 100%;">
+                    <!-- Lado Esquerdo: Upload de PDF -->
+                    <div style="flex: 1; max-width: 450px;">
+                        <!-- Painel de Importação -->
+                        <div class="card glass-card shadow-lg" id="import-card">
+                            <h2 class="card-title">1. Carregar Lista de Vendas</h2>
+                            <p class="card-subtitle">Importe um PDF vinculando-o a um despachante para criar uma nova fila.</p>
+                            
+                            <div class="form-group-despachante">
+                                <label for="despachante-name-input">👤 Nome do Despachante Responsável:</label>
+                                <input type="text" id="despachante-name-input" class="input-despachante" placeholder="Digite o nome do despachante para liberar o envio..." autocomplete="off">
+                            </div>
+
+                            <div class="drag-drop-area disabled-card" id="drop-area" style="opacity: 0.5; pointer-events: none;">
+                                <span class="upload-icon">📥</span>
+                                <p class="upload-text">Defina o despachante acima para habilitar o upload</p>
+                            </div>
+                            <input type="file" id="pdf-file-input" accept="application/pdf" style="display: none;" disabled>
+                            
+                            <button class="btn btn-outline w-full" id="btn-load-test" style="margin-top: 12px;" disabled>
+                                🧪 Carregar Modelo de Teste (teste.pdf)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Lado Direito: Histórico de Auditoria Local -->
+                    <div style="flex: 2; display: flex; flex-direction: column;">
+                        <!-- Painel de Logs de Auditoria -->
+                        <div class="card glass-card shadow-lg flex-1" style="display: flex; flex-direction: column; padding: 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 20px;">📋</span>
+                                    <h2 class="card-title" style="margin: 0;">Histórico de Auditoria Local</h2>
+                                    <span class="logs-count-badge" id="logs-count-badge">0</span>
+                                </div>
+                                <div class="logs-btn-group" id="logs-btn-group" style="display: none; gap: 8px;">
+                                    <button class="logs-btn logs-btn-primary" id="btn-export-logs">📥 Exportar Logs (.csv)</button>
+                                    <button class="logs-btn" id="btn-clear-logs">🗑️ Limpar</button>
+                                </div>
+                            </div>
+                            
+                            <div class="logs-table-wrapper scrollable" style="flex: 1; max-height: 480px;">
+                                <table class="logs-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Data/Hora</th>
+                                            <th>Nota Fiscal</th>
+                                            <th>Ação / Operação</th>
+                                            <th>EAN / SKU</th>
+                                            <th>Qtd</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="logs-table-body">
+                                        <!-- Preenchido dinamicamente via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="logs-empty" id="logs-empty" style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+                                Nenhum evento registrado ainda. Carregue um PDF na coluna ao lado e comece a bipar.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
-
-        <!-- Histórico de Auditoria Local -->
-        <section class="logs-section" id="logs-section">
-            <div class="logs-header" id="logs-header">
-                <div class="logs-header-title">
-                    <span>📋</span>
-                    <span>Histórico de Auditoria Local</span>
-                    <span class="logs-count-badge" id="logs-count-badge">0</span>
-                </div>
-                <div class="logs-header-actions">
-                    <div class="logs-btn-group" id="logs-btn-group" style="display: none;">
-                        <button class="logs-btn logs-btn-primary" id="btn-export-logs">📥 Exportar Logs (.csv)</button>
-                        <button class="logs-btn" id="btn-clear-logs">🗑️ Limpar</button>
-                    </div>
-                    <span class="logs-toggle-icon" id="logs-toggle-icon">▼</span>
-                </div>
-            </div>
-            <div class="logs-content" id="logs-content">
-                <div class="logs-table-wrapper">
-                    <table class="logs-table">
-                        <thead>
-                            <tr>
-                                <th>Data/Hora</th>
-                                <th>Nota Fiscal</th>
-                                <th>Ação / Operação</th>
-                                <th>EAN / SKU</th>
-                                <th>Qtd</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="logs-table-body">
-                            <!-- Preenchido dinamicamente via JS -->
-                        </tbody>
-                    </table>
-                </div>
-                <div class="logs-empty" id="logs-empty">Nenhum evento registrado ainda. Carregue um PDF e comece a bipar.</div>
-            </div>
-        </section>
 
         <!-- Toast de Feedback Rápido (Notificação flutuante) -->
         <div id="toast" class="toast">
