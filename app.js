@@ -63,7 +63,7 @@ class ExpedicaoDB {
                 nome: nome,
                 data_criacao: new Date().toISOString(),
                 data_limite: dataLimite || '',
-                concluido: false
+                concluido: 0
             };
             const request = store.add(despachante);
             request.onsuccess = (e) => resolve(e.target.result);
@@ -86,7 +86,7 @@ class ExpedicaoDB {
             const transaction = this.db.transaction(['despachantes'], 'readonly');
             const store = transaction.objectStore('despachantes');
             const index = store.index('concluido');
-            const request = index.getAll(false);
+            const request = index.getAll(0);
             request.onsuccess = (e) => {
                 const list = e.target.result || [];
                 list.sort((a,b) => new Date(b.data_criacao) - new Date(a.data_criacao));
@@ -118,7 +118,7 @@ class ExpedicaoDB {
             getReq.onsuccess = () => {
                 const despachante = getReq.result;
                 if (despachante) {
-                    despachante.concluido = true;
+                    despachante.concluido = 1;
                     const putReq = store.put(despachante);
                     putReq.onsuccess = () => resolve(true);
                     putReq.onerror = (e) => reject(e);
@@ -2028,7 +2028,7 @@ window.exportarCsvPeloPainel = async function(id) {
 function updateAllTimers() {
     const timers = document.querySelectorAll('.despachante-timer');
     timers.forEach(el => {
-        const isConcluido = el.getAttribute('data-concluido') === 'true';
+        const isConcluido = el.getAttribute('data-concluido') === '1';
         if (isConcluido) {
             el.innerHTML = '<span style="color: var(--success); font-weight: 700;">Concluído ✅</span>';
             return;
