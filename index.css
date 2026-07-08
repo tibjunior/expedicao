@@ -155,17 +155,8 @@ body {
 
 /* Grid Layout Principal */
 .app-main {
-    display: grid;
-    grid-template-columns: 420px 1fr;
-    gap: 24px;
+    width: 100%;
     flex: 1;
-    align-items: start;
-}
-
-@media (max-width: 1024px) {
-    .app-main {
-        grid-template-columns: 1fr;
-    }
 }
 
 .control-column, .list-column {
