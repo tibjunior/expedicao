@@ -1630,8 +1630,8 @@ function startCameraScanner() {
         (decodedText) => {
             if (state.errorModalActive) return;
             
-            // Pausa a câmera no momento em que detecta um código
-            stopCameraScanner();
+            // Pausa a câmera no momento em que detecta um código, preservando o modo guiado ativo para validação
+            stopCameraScanner(true);
             
             processBarcodeRead(decodedText);
             
@@ -1652,15 +1652,15 @@ function startCameraScanner() {
     });
 }
 
-function stopCameraScanner() {
+function stopCameraScanner(keepGuidedMode = false) {
     if (!state.scannerActive) return;
 
     state.scannerActive = false;
     elements.cameraScannerContainer.classList.remove('active');
     elements.barcodeInput.disabled = false;
     
-    // Se estava no Modo Guiado de Item Focado, desativa-o
-    if (state.focusedItemId) {
+    // Se estava no Modo Guiado de Item Focado e não foi pedido para manter, desativa-o
+    if (state.focusedItemId && !keepGuidedMode) {
         deactivateFocusedItemMode();
     }
     
