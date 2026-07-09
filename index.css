@@ -2126,7 +2126,7 @@ body.dark-mode {
         min-width: 100% !important;
     }
 
-    .items-table tr {
+    .items-table tr.item-row {
         display: grid !important;
         grid-template-areas: 
             "status qty"
@@ -2151,6 +2151,14 @@ body.dark-mode {
     .items-table tr.no-ean-row {
         background: rgba(239, 68, 68, 0.04) !important;
         border-color: rgba(239, 68, 68, 0.15) !important;
+    }
+
+    .items-table tr:not(.item-row) {
+        display: block !important;
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        padding: 16px 0 !important;
     }
 
     .items-table td {

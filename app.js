@@ -1410,6 +1410,7 @@ function renderTable() {
 
     filteredItems.forEach(item => {
         const tr = document.createElement('tr');
+        tr.classList.add('item-row');
         tr.setAttribute('data-id', item.id);
         if (item.expedido) {
             tr.classList.add('completed-row');
