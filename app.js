@@ -511,19 +511,48 @@ function loadSettings() {
     // Som
     const savedSound = localStorage.getItem('expedicao_sound');
     state.soundEnabled = savedSound !== 'false'; // Padrão true
-    updateSoundButtonIcon();
 
     // Perfil Sonoro
     const savedProfile = localStorage.getItem('expedicao_sound_profile') || 'classic';
     state.soundProfile = savedProfile;
-    if (elements.soundProfileSelect) {
-        elements.soundProfileSelect.value = savedProfile;
-    }
+    
+    // Atualiza a interface
+    updateSoundButtonIcon();
 }
 
-// Atualiza o ícone do botão de som com base no estado
+// Atualiza o ícone do botão de som com base no estado e nas opções do dropdown
 function updateSoundButtonIcon() {
-    elements.soundToggle.querySelector('.icon').textContent = state.soundEnabled ? '🔊' : '🔇';
+    const activeIconEl = document.getElementById('active-sound-icon');
+    if (!activeIconEl) return;
+    
+    // Mapeamento de ícones
+    const iconMap = {
+        mute: '🔇',
+        classic: '🔊',
+        retro: '🎮',
+        melodic: '🔔',
+        synthwave: '🌌'
+    };
+    
+    // Define o ícone exibido no cabeçalho
+    if (!state.soundEnabled) {
+        activeIconEl.textContent = iconMap.mute;
+    } else {
+        activeIconEl.textContent = iconMap[state.soundProfile] || '🔊';
+    }
+    
+    // Atualiza a classe active das opções no dropdown
+    const soundItems = document.querySelectorAll('.sound-dropdown-item');
+    soundItems.forEach(item => {
+        const soundType = item.getAttribute('data-sound');
+        if (!state.soundEnabled && soundType === 'mute') {
+            item.classList.add('active');
+        } else if (state.soundEnabled && soundType === state.soundProfile) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
 }
 
 // Restaura a aba e o despachante ativo a partir do banco e do LocalStorage
@@ -625,23 +654,50 @@ function initEventListeners() {
         localStorage.setItem('expedicao_theme', state.theme);
     });
 
-    // Alternância de Som
-    elements.soundToggle.addEventListener('click', () => {
-        state.soundEnabled = !state.soundEnabled;
-        updateSoundButtonIcon();
-        localStorage.setItem('expedicao_sound', state.soundEnabled);
+    // Controle do Dropdown de Som Customizado
+    const soundDropdownTrigger = document.getElementById('sound-dropdown-trigger');
+    const soundDropdownContainer = document.getElementById('sound-dropdown-container');
+    
+    if (soundDropdownTrigger && soundDropdownContainer) {
+        soundDropdownTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            soundDropdownContainer.classList.toggle('open');
+        });
         
-        if (state.soundEnabled) {
-            playSoundEffect('unit');
-        }
-    });
-
-    // Seletor de Perfil de Som
-    if (elements.soundProfileSelect) {
-        elements.soundProfileSelect.addEventListener('change', (e) => {
-            state.soundProfile = e.target.value;
-            localStorage.setItem('expedicao_sound_profile', state.soundProfile);
-            playSoundEffect('unit');
+        // Clique fora fecha o dropdown
+        document.addEventListener('click', (e) => {
+            if (!soundDropdownContainer.contains(e.target)) {
+                soundDropdownContainer.classList.remove('open');
+            }
+        });
+        
+        // Escuta os cliques nos itens do dropdown de som
+        const soundDropdownItems = document.querySelectorAll('.sound-dropdown-item');
+        soundDropdownItems.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const soundType = btn.getAttribute('data-sound');
+                
+                if (soundType === 'mute') {
+                    // Muta
+                    state.soundEnabled = false;
+                } else {
+                    // Ativa e muda perfil
+                    state.soundEnabled = true;
+                    state.soundProfile = soundType;
+                    localStorage.setItem('expedicao_sound_profile', soundType);
+                }
+                
+                localStorage.setItem('expedicao_sound', state.soundEnabled);
+                updateSoundButtonIcon();
+                
+                // Fecha o menu
+                soundDropdownContainer.classList.remove('open');
+                
+                // Toca som de confirmação/teste se não estiver mutado
+                if (state.soundEnabled) {
+                    playSoundEffect('unit');
+                }
+            });
         });
     }
 

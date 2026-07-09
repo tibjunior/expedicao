@@ -39,16 +39,17 @@
                 <button id="theme-toggle" class="btn btn-icon" title="Alternar Tema">
                     <span class="icon">☀</span>
                 </button>
-                <button id="sound-toggle" class="btn btn-icon" title="Ativar/Desativar Som">
-                    <span class="icon">🔊</span>
-                </button>
-                <div class="sound-select-wrapper">
-                    <select id="sound-profile-select" class="sound-profile-select" title="Selecionar Perfil Sonoro">
-                        <option value="classic">🔊 Clássico</option>
-                        <option value="retro">🎮 Retro Arcade</option>
-                        <option value="melodic">🔔 Sinos Suaves</option>
-                        <option value="synthwave">🌌 Synthwave</option>
-                    </select>
+                <div class="custom-sound-dropdown" id="sound-dropdown-container">
+                    <button class="btn btn-icon dropdown-sound-trigger-btn" id="sound-dropdown-trigger" title="Configurar Som">
+                        <span class="icon" id="active-sound-icon">🔊</span>
+                    </button>
+                    <div class="sound-dropdown-menu-list" id="sound-dropdown-menu">
+                        <button class="sound-dropdown-item" data-sound="mute" title="Mutar Som">🔇</button>
+                        <button class="sound-dropdown-item active" data-sound="classic" title="Som Clássico">🔊</button>
+                        <button class="sound-dropdown-item" data-sound="retro" title="Som Arcade">🎮</button>
+                        <button class="sound-dropdown-item" data-sound="melodic" title="Sinos Suaves">🔔</button>
+                        <button class="sound-dropdown-item" data-sound="synthwave" title="Som Synthwave">🌌</button>
+                    </div>
                 </div>
             </div>
         </header>
