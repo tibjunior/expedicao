@@ -1676,6 +1676,104 @@ body.light-mode .sku-badge {
     box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
 }
 
+/* Ordenação Customizada (dropdown de ordenação) */
+.title-with-sort {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sort-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.btn-sort-trigger {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    padding: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.btn-sort-trigger:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.light-mode .btn-sort-trigger:hover {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.sort-menu-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 6px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+    min-width: 200px;
+    display: none;
+    flex-direction: column;
+    padding: 6px;
+    z-index: 990;
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.sort-dropdown.open .sort-menu-list {
+    display: flex;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.sort-menu-header {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    padding: 6px 12px;
+    font-weight: 700;
+}
+
+.sort-menu-item {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.sort-menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.light-mode .sort-menu-item:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.sort-menu-item.active {
+    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.12);
+}
+
 /* Ocultação e exibição de abas */
 .tab-content {
     display: none;

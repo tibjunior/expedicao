@@ -126,7 +126,23 @@
                         <!-- Lista de Itens -->
                         <div class="card glass-card shadow-lg flex-1 flex flex-col" id="items-card">
                             <div class="card-header-row">
-                                <h2 class="card-title">Itens em Espera (Fila de Expedição)</h2>
+                                <div class="title-with-sort">
+                                    <h2 class="card-title" id="items-title">Fila de Espera</h2>
+                                    <div class="sort-dropdown" id="sort-dropdown-container">
+                                        <button class="btn btn-icon btn-sort-trigger" id="sort-dropdown-trigger" title="Organizar Fila">
+                                            <span class="icon">⇅</span>
+                                        </button>
+                                        <div class="sort-menu-list" id="sort-dropdown-menu">
+                                            <div class="sort-menu-header">Organizar por:</div>
+                                            <button class="sort-menu-item active" data-sort="default">Padrão PDF</button>
+                                            <button class="sort-menu-item" data-sort="status">Status</button>
+                                            <button class="sort-menu-item" data-sort="nota">Nota / Cliente</button>
+                                            <button class="sort-menu-item" data-sort="descricao">Produto / Descrição</button>
+                                            <button class="sort-menu-item" data-sort="sku">SKU</button>
+                                            <button class="sort-menu-item" data-sort="quantidade">Restante / Total</button>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div class="filter-group">
                                     <button class="btn btn-tab active" data-filter="all">Todos</button>
                                     <button class="btn btn-tab" data-filter="pending">Pendentes</button>

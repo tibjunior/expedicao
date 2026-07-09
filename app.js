@@ -382,6 +382,8 @@ const state = {
     activeDespachanteId: null,
     items: [],
     filter: 'all', // 'all', 'pending', 'completed'
+    sortBy: 'default', // 'default', 'status', 'nota', 'descricao', 'sku', 'quantidade'
+    sortOrder: 'asc', // 'asc', 'desc'
     soundEnabled: true,
     soundProfile: 'classic', // 'classic', 'retro', 'melodic', 'synthwave'
     theme: 'dark', // 'dark', 'light'
@@ -561,6 +563,49 @@ function initEventListeners() {
             if (!dropdownContainer.contains(e.target)) {
                 dropdownContainer.classList.remove('open');
             }
+        });
+    }
+
+    // Controle do Dropdown de Ordenação da Fila de Espera
+    const sortDropdownTrigger = document.getElementById('sort-dropdown-trigger');
+    const sortDropdownContainer = document.getElementById('sort-dropdown-container');
+    if (sortDropdownTrigger && sortDropdownContainer) {
+        sortDropdownTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sortDropdownContainer.classList.toggle('open');
+        });
+        
+        // Clique fora fecha o dropdown
+        document.addEventListener('click', (e) => {
+            if (!sortDropdownContainer.contains(e.target)) {
+                sortDropdownContainer.classList.remove('open');
+            }
+        });
+        
+        // Selecionar critério de ordenação
+        const sortMenuItems = document.querySelectorAll('.sort-menu-item');
+        sortMenuItems.forEach(item => {
+            item.addEventListener('click', () => {
+                const sortBy = item.getAttribute('data-sort');
+                
+                if (state.sortBy === sortBy) {
+                    // Inverte a direção se clicar na mesma opção
+                    state.sortOrder = state.sortOrder === 'asc' ? 'desc' : 'asc';
+                } else {
+                    state.sortBy = sortBy;
+                    state.sortOrder = 'asc';
+                }
+                
+                // Atualiza visual
+                sortMenuItems.forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                
+                // Fecha menu
+                sortDropdownContainer.classList.remove('open');
+                
+                // Re-renderiza a tabela
+                renderTable();
+            });
         });
     }
 
@@ -1289,6 +1334,35 @@ function renderTable() {
         
         return true;
     });
+
+    // Ordena os itens com base no critério selecionado no painel
+    if (state.sortBy && state.sortBy !== 'default') {
+        filteredItems.sort((a, b) => {
+            let comparison = 0;
+            switch (state.sortBy) {
+                case 'status':
+                    // Pendente (0) primeiro, Expedido (1) depois
+                    const statusA = a.expedido ? 1 : 0;
+                    const statusB = b.expedido ? 1 : 0;
+                    comparison = statusA - statusB;
+                    break;
+                case 'nota':
+                    comparison = a.nota.localeCompare(b.nota, 'pt-BR') || a.cliente.localeCompare(b.cliente, 'pt-BR');
+                    break;
+                case 'descricao':
+                    comparison = a.descricao.localeCompare(b.descricao, 'pt-BR');
+                    break;
+                case 'sku':
+                    comparison = a.sku.localeCompare(b.sku, 'pt-BR');
+                    break;
+                case 'quantidade':
+                    // Menor quantidade restante primeiro. Se empatar, ordena pela quantidade original
+                    comparison = a.quantidade - b.quantidade || a.quantidadeOriginal - b.quantidadeOriginal;
+                    break;
+            }
+            return state.sortOrder === 'asc' ? comparison : -comparison;
+        });
+    }
 
     if (filteredItems.length === 0) {
         elements.itemsTableBody.innerHTML = `
