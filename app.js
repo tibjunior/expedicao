@@ -1678,6 +1678,7 @@ function stopCameraScanner(keepGuidedMode = false) {
 // 8. NOTIFICAÇÕES (TOAST)
 // ==========================================
 let toastTimeout = null;
+let toastCloseListener = null;
 
 /**
  * Exibe um toast flutuante na tela com feedback.
@@ -1688,6 +1689,14 @@ let toastTimeout = null;
 function showToast(title, desc, type = 'success') {
     if (toastTimeout) {
         clearTimeout(toastTimeout);
+        toastTimeout = null;
+    }
+
+    // Se já havia um listener de clique do toast anterior ativo, remove-o preventivamente
+    if (toastCloseListener) {
+        document.removeEventListener('click', toastCloseListener);
+        document.removeEventListener('touchend', toastCloseListener);
+        toastCloseListener = null;
     }
 
     elements.toast.className = `toast show ${type}`;
@@ -1695,8 +1704,36 @@ function showToast(title, desc, type = 'success') {
     elements.toast.querySelector('.toast-desc').textContent = desc;
 
     const duration = type === 'error' ? 7000 : 4000;
+
+    // Função de callback para fechar o toast ao tocar em qualquer área da tela
+    const closeOnTap = () => {
+        elements.toast.classList.remove('show');
+        document.removeEventListener('click', closeOnTap);
+        document.removeEventListener('touchend', closeOnTap);
+        if (toastTimeout) {
+            clearTimeout(toastTimeout);
+            toastTimeout = null;
+        }
+        toastCloseListener = null;
+    };
+
+    // Registra o evento de clique/toque com um delay sutil para não capturar a própria ação que disparou o toast
+    setTimeout(() => {
+        if (elements.toast.classList.contains('show')) {
+            toastCloseListener = closeOnTap;
+            document.addEventListener('click', closeOnTap);
+            document.addEventListener('touchend', closeOnTap);
+        }
+    }, 150);
+
     toastTimeout = setTimeout(() => {
         elements.toast.classList.remove('show');
+        if (toastCloseListener) {
+            document.removeEventListener('click', toastCloseListener);
+            document.removeEventListener('touchend', toastCloseListener);
+            toastCloseListener = null;
+        }
+        toastTimeout = null;
     }, duration);
 }
 
