@@ -916,9 +916,22 @@ body.light-mode .sku-badge {
 }
 
 .toast.error {
-    border-color: var(--danger-border);
-    background: rgba(239, 68, 68, 0.15);
-    backdrop-filter: blur(16px);
+    border: 2px solid var(--danger) !important;
+    background: #1a0f0f !important;
+    box-shadow: 0 0 35px rgba(239, 68, 68, 0.45) !important;
+    top: 50% !important;
+    bottom: auto !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) scale(1.15) !important;
+    opacity: 0;
+    padding: 20px 28px !important;
+    max-width: 440px !important;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s !important;
+}
+
+.toast.error.show {
+    transform: translate(-50%, -50%) scale(1.15) !important;
+    opacity: 1 !important;
 }
 
 .toast-icon {

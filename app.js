@@ -1694,9 +1694,10 @@ function showToast(title, desc, type = 'success') {
     elements.toast.querySelector('.toast-title').textContent = title;
     elements.toast.querySelector('.toast-desc').textContent = desc;
 
+    const duration = type === 'error' ? 7000 : 4000;
     toastTimeout = setTimeout(() => {
         elements.toast.classList.remove('show');
-    }, 4000);
+    }, duration);
 }
 
 // Limpar todo o estado para importar novo arquivo
