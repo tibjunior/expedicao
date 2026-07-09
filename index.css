@@ -2113,8 +2113,15 @@ body.dark-mode {
 
 /* Transformação da Tabela de Itens em Cards no Mobile */
 @media (max-width: 768px) {
-    .items-table thead {
+    .items-table thead,
+    .items-table thead tr,
+    .items-table thead th {
         display: none !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        background: transparent !important;
     }
     
     .items-table, .items-table tbody, .items-table tr, .items-table td {
@@ -2158,7 +2165,9 @@ body.dark-mode {
         border: none !important;
         background: transparent !important;
         box-shadow: none !important;
-        padding: 16px 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        height: auto !important;
     }
 
     .items-table td {
