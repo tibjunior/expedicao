@@ -1011,6 +1011,27 @@ async function processBarcodeRead(rawSku) {
         return;
     }
 
+    // Se estiver no Modo Guiado de Item Específico, valida contra o item focado
+    if (state.focusedItemId) {
+        const focusedItem = state.items.find(item => item.id === state.focusedItemId);
+        if (!focusedItem) {
+            deactivateFocusedItemMode();
+        } else {
+            // Verifica se o código lido coincide com o EAN ou SKU do item focado
+            const isMatch = 
+                (focusedItem.temEan && (focusedItem.ean.toUpperCase() === code || focusedItem.ean.replace(/[^0-9]/g, '') === code.replace(/[^0-9]/g, ''))) ||
+                (focusedItem.sku.toUpperCase() === code);
+                
+            if (!isMatch) {
+                // Erro de bipagem no modo focado
+                triggerInputErrorEffect();
+                playSoundEffect('error');
+                showToast('Produto Incorreto', `Foco no SKU: ${focusedItem.sku}. Por favor, bipe o produto correto!`, 'error');
+                return;
+            }
+        }
+    }
+
     // Procurar por itens pendentes de forma estrita pelo EAN do produto
     let matchedItem = state.items.find(item => 
         !item.expedido && 
@@ -1063,6 +1084,12 @@ async function processBarcodeRead(rawSku) {
         } else {
             playSoundEffect('unit');
             showToast('Unidade Registrada', `+${unidadesParaExpedir} de ${matchedItem.descricao}. Restam ${matchedItem.quantidade} un.`, 'success');
+        }
+        
+        // Se o item focado foi concluído no modo guiado, encerra o foco e desativa a câmera
+        if (state.focusedItemId && matchedItem.id === state.focusedItemId && matchedItem.expedido) {
+            deactivateFocusedItemMode();
+            stopCameraScanner();
         }
         
         checkAllCompleted();
@@ -1461,6 +1488,23 @@ function renderTable() {
                 ${item.expedido ? '' : `<button class="btn btn-outline btn-unit-add" onclick="manualAddUnit(${item.id})" style="padding: 2px 6px; font-size: 10px; margin-left: 8px; border-radius: 4px;">+1</button>`}
             </td>
         `;
+        // Mantém a classe de foco ativa no card caso a tabela re-renderize antes do fim da bipagem
+        if (state.focusedItemId && item.id === state.focusedItemId) {
+            tr.classList.add('focused-row');
+        }
+
+        // Clique na linha do item abre a câmera e entra no modo de conferência focado
+        tr.addEventListener('click', (e) => {
+            if (e.target.closest('.btn-unit-add')) return;
+            
+            if (item.expedido) {
+                showToast('Item já Expedido', 'Este produto já foi totalmente conferido e expedido.', 'info');
+                return;
+            }
+            
+            activateFocusedItemMode(item);
+        });
+
         elements.itemsTableBody.appendChild(tr);
     });
 }
@@ -1511,6 +1555,48 @@ window.manualAddUnit = async function(id) {
         checkAllCompleted();
     }
 };
+
+// ==========================================
+// 6.2. MODO GUIADO DE ITEM FOCADO
+// ==========================================
+function activateFocusedItemMode(item) {
+    state.focusedItemId = item.id;
+    state.focusedItemEan = item.ean;
+    state.focusedItemSku = item.sku;
+    
+    // Destaca a linha visualmente
+    document.querySelectorAll('.items-table tr').forEach(tr => {
+        tr.classList.remove('focused-row');
+    });
+    
+    const activeTr = document.querySelector(`.items-table tr[data-id="${item.id}"]`);
+    if (activeTr) {
+        activeTr.classList.add('focused-row');
+    }
+    
+    // Abre a câmera
+    startCameraScanner();
+    
+    showToast('Modo Guiado Ativo', `Bipe especificamente o SKU: ${item.sku}`, 'info');
+    
+    if (elements.barcodeInput) {
+        elements.barcodeInput.placeholder = `Bipe especificamente o SKU: ${item.sku}...`;
+    }
+}
+
+function deactivateFocusedItemMode() {
+    state.focusedItemId = null;
+    state.focusedItemEan = null;
+    state.focusedItemSku = null;
+    
+    document.querySelectorAll('.items-table tr').forEach(tr => {
+        tr.classList.remove('focused-row');
+    });
+    
+    if (elements.barcodeInput) {
+        elements.barcodeInput.placeholder = 'Aguardando leitura de EAN...';
+    }
+}
 
 // ==========================================
 // 7. CONTROLE DA CÂMERA SCANNER (WEBCAM)
@@ -1572,6 +1658,11 @@ function stopCameraScanner() {
     state.scannerActive = false;
     elements.cameraScannerContainer.classList.remove('active');
     elements.barcodeInput.disabled = false;
+    
+    // Se estava no Modo Guiado de Item Focado, desativa-o
+    if (state.focusedItemId) {
+        deactivateFocusedItemMode();
+    }
     
     if (html5QrcodeScanner) {
         html5QrcodeScanner.stop().then(() => {

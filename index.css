@@ -2263,4 +2263,26 @@ body.dark-mode {
     }
 }
 
+/* Efeito de Foco Guiado de Item Focado */
+.items-table tr.item-row.focused-row {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 15px var(--primary-glow) !important;
+    animation: pulseFocus 2s infinite ease-in-out !important;
+}
+
+@keyframes pulseFocus {
+    0% {
+        box-shadow: 0 0 8px var(--primary-glow);
+        background: rgba(99, 102, 241, 0.06) !important;
+    }
+    50% {
+        box-shadow: 0 0 18px rgba(99, 102, 241, 0.45);
+        background: rgba(99, 102, 241, 0.15) !important;
+    }
+    100% {
+        box-shadow: 0 0 8px var(--primary-glow);
+        background: rgba(99, 102, 241, 0.06) !important;
+    }
+}
+
 
