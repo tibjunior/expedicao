@@ -20,9 +20,15 @@
         <header class="app-header">
             <div class="logo-area">
                 <span class="logo-icon"></span>
-                <div class="tabs-nav">
-                    <button class="tab-btn active" id="tab-btn-expedicao" data-tab="expedicao">Expedição de Vendas</button>
-                    <button class="tab-btn" id="tab-btn-administracao" data-tab="administracao">Administração de Vendas</button>
+                <div class="custom-tabs-dropdown" id="tabs-dropdown-container">
+                    <button class="dropdown-trigger-btn" id="tabs-dropdown-trigger" title="Alternar Aba">
+                        <span id="active-tab-title">Expedição de Vendas</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu-list" id="tabs-dropdown-menu">
+                        <button class="dropdown-menu-item active" id="tab-btn-expedicao" data-tab="expedicao">Expedição de Vendas</button>
+                        <button class="dropdown-menu-item" id="tab-btn-administracao" data-tab="administracao">Administração de Vendas</button>
+                    </div>
                 </div>
             </div>
             <div class="header-actions">

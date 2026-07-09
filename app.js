@@ -547,6 +547,23 @@ function initEventListeners() {
         elements.tabBtnAdministracao.addEventListener('click', () => switchTab('administracao'));
     }
 
+    // Controle do Dropdown de Abas Customizado
+    const dropdownTrigger = document.getElementById('tabs-dropdown-trigger');
+    const dropdownContainer = document.getElementById('tabs-dropdown-container');
+    if (dropdownTrigger && dropdownContainer) {
+        dropdownTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownContainer.classList.toggle('open');
+        });
+        
+        // Clique fora fecha o dropdown
+        document.addEventListener('click', (e) => {
+            if (!dropdownContainer.contains(e.target)) {
+                dropdownContainer.classList.remove('open');
+            }
+        });
+    }
+
     // Alternância de Tema
     elements.themeToggle.addEventListener('click', () => {
         if (state.theme === 'dark') {
@@ -1856,19 +1873,25 @@ function switchTab(tab, selectedId = null) {
     state.activeTab = tab;
     localStorage.setItem('expedicao_active_tab', tab);
     
+    const activeTabTitle = document.getElementById('active-tab-title');
+    
     if (tab === 'expedicao') {
-        elements.tabBtnExpedicao.classList.add('active');
-        elements.tabBtnAdministracao.classList.remove('active');
-        elements.tabContentExpedicao.classList.add('active');
-        elements.tabContentAdministracao.classList.remove('active');
+        if (activeTabTitle) activeTabTitle.textContent = 'Expedição de Vendas';
+        
+        if (elements.tabBtnExpedicao) elements.tabBtnExpedicao.classList.add('active');
+        if (elements.tabBtnAdministracao) elements.tabBtnAdministracao.classList.remove('active');
+        if (elements.tabContentExpedicao) elements.tabContentExpedicao.classList.add('active');
+        if (elements.tabContentAdministracao) elements.tabContentAdministracao.classList.remove('active');
         
         loadDespachantesDropdown(selectedId);
         startBackgroundSync();
     } else {
-        elements.tabBtnExpedicao.classList.remove('active');
-        elements.tabBtnAdministracao.classList.add('active');
-        elements.tabContentExpedicao.classList.remove('active');
-        elements.tabContentAdministracao.classList.add('active');
+        if (activeTabTitle) activeTabTitle.textContent = 'Administração de Vendas';
+        
+        if (elements.tabBtnExpedicao) elements.tabBtnExpedicao.classList.remove('active');
+        if (elements.tabBtnAdministracao) elements.tabBtnAdministracao.classList.add('active');
+        if (elements.tabContentExpedicao) elements.tabContentExpedicao.classList.remove('active');
+        if (elements.tabContentAdministracao) elements.tabContentAdministracao.classList.add('active');
         
         stopCameraScanner();
         
@@ -1880,6 +1903,12 @@ function switchTab(tab, selectedId = null) {
         
         renderDespachantesTable();
         startBackgroundSync();
+    }
+    
+    // Fecha o menu do dropdown de abas
+    const dropdownContainer = document.getElementById('tabs-dropdown-container');
+    if (dropdownContainer) {
+        dropdownContainer.classList.remove('open');
     }
 }
 

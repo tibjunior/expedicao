@@ -1577,37 +1577,98 @@ body.light-mode .sku-badge {
 }
 
 /* ==========================================
-   8.10. COMUTADOR DE ABAS (TABS NAV)
+   8.10. COMUTADOR DE ABAS (DROPDOWN CUSTOMIZADO)
    ========================================== */
-.tabs-nav {
-    display: flex;
-    gap: 4px;
-    background: rgba(15, 23, 42, 0.4);
-    padding: 3px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    margin-left: 16px;
+.custom-tabs-dropdown {
+    position: relative;
+    display: inline-block;
+    margin-left: 12px;
 }
 
-.tab-btn {
-    background: transparent;
+.dropdown-trigger-btn {
+    background: none;
     border: none;
-    color: var(--text-muted);
-    padding: 6px 14px;
-    font-size: 13px;
-    font-weight: 700;
-    border-radius: 9px;
-    cursor: pointer;
-    font-family: 'Outfit', sans-serif;
-    transition: all 0.2s ease;
-}
-
-.tab-btn:hover {
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.02);
+    font-size: 20px;
+    font-weight: 700;
+    font-family: 'Outfit', sans-serif;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-.tab-btn.active {
+.dropdown-trigger-btn:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.light-mode .dropdown-trigger-btn:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+.dropdown-arrow {
+    font-size: 13px;
+    transition: transform 0.2s ease;
+    color: var(--text-muted);
+}
+
+.custom-tabs-dropdown.open .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.dropdown-menu-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+    min-width: 220px;
+    display: none;
+    flex-direction: column;
+    padding: 6px;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.custom-tabs-dropdown.open .dropdown-menu-list {
+    display: flex;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.dropdown-menu-item {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.dropdown-menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: var(--text-primary);
+}
+
+.light-mode .dropdown-menu-item:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+.dropdown-menu-item.active {
     color: #60a5fa;
     background: rgba(59, 130, 246, 0.15);
     box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
@@ -1924,18 +1985,8 @@ body.dark-mode {
 }
 
 @media (max-width: 480px) {
-    .tabs-nav {
-        margin-left: 0;
-        margin-top: 10px;
-        width: 100%;
-        justify-content: space-between;
-    }
-
-    .tab-btn {
-        flex: 1;
-        text-align: center;
-        padding: 8px 6px;
-        font-size: 12px;
+    .custom-tabs-dropdown {
+        margin-left: 8px;
     }
 
     .app-header {
