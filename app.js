@@ -403,7 +403,6 @@ let html5QrcodeScanner = null;
 const elements = {};
 
 function initElements() {
-    elements.themeToggle = document.getElementById('theme-toggle');
     elements.soundToggle = document.getElementById('sound-toggle');
     elements.dropArea = document.getElementById('drop-area');
     elements.fileInput = document.getElementById('pdf-file-input');
@@ -495,18 +494,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Carrega configurações de tema e som salvas
 function loadSettings() {
-    // Tema
-    const savedTheme = localStorage.getItem('expedicao_theme') || 'dark';
-    state.theme = savedTheme;
-    if (savedTheme === 'light') {
-        document.body.classList.remove('dark-mode');
-        document.body.classList.add('light-mode');
-        elements.themeToggle.querySelector('.icon').textContent = '🌙';
-    } else {
-        document.body.classList.remove('light-mode');
-        document.body.classList.add('dark-mode');
-        elements.themeToggle.querySelector('.icon').textContent = '☀';
-    }
+    // Força sempre o tema escuro padrão solicitado pelo usuário
+    state.theme = 'dark';
+    document.body.classList.remove('light-mode');
+    document.body.classList.add('dark-mode');
 
     // Som
     const savedSound = localStorage.getItem('expedicao_sound');
@@ -638,21 +629,7 @@ function initEventListeners() {
         });
     }
 
-    // Alternância de Tema
-    elements.themeToggle.addEventListener('click', () => {
-        if (state.theme === 'dark') {
-            document.body.classList.remove('dark-mode');
-            document.body.classList.add('light-mode');
-            elements.themeToggle.querySelector('.icon').textContent = '🌙';
-            state.theme = 'light';
-        } else {
-            document.body.classList.remove('light-mode');
-            document.body.classList.add('dark-mode');
-            elements.themeToggle.querySelector('.icon').textContent = '☀';
-            state.theme = 'dark';
-        }
-        localStorage.setItem('expedicao_theme', state.theme);
-    });
+    // Alternância de Tema desativada (Usando apenas Tema Escuro)
 
     // Controle do Dropdown de Som Customizado
     const soundDropdownTrigger = document.getElementById('sound-dropdown-trigger');
