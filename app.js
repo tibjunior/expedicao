@@ -1381,6 +1381,7 @@ function renderTable() {
         // Filtro de aba
         if (state.filter === 'pending' && item.expedido) return false;
         if (state.filter === 'completed' && !item.expedido) return false;
+        if (state.filter === 'noean' && item.temEan) return false; // Mostra apenas itens SEM EAN
         
         // Filtro de pesquisa por texto
         if (searchVal) {
@@ -2598,11 +2599,1360 @@ function stopBackgroundSync() {
     }
 }
 
+// ==========================================
+// 9. NOVAS FUNCIONALIDADES
+// ==========================================
+
+// -------------------------------------------------------
+// 9.1. PALETA DE COMANDOS (Ideia 1)
+// -------------------------------------------------------
+let paletteOpen = false;
+
+function openPalette() {
+    const overlay = document.getElementById('palette-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+    paletteOpen = true;
+    
+    setTimeout(() => {
+        const searchInput = document.getElementById('palette-search');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+            filterPaletteCommands('');
+        }
+    }, 100);
+}
+
+function closePalette() {
+    const overlay = document.getElementById('palette-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'none';
+    paletteOpen = false;
+}
+
+function filterPaletteCommands(query) {
+    const commands = document.querySelectorAll('.palette-command');
+    const q = query.toLowerCase().trim();
+    commands.forEach(cmd => {
+        const label = cmd.querySelector('.cmd-label')?.textContent?.toLowerCase() || '';
+        const key = cmd.querySelector('.cmd-key')?.textContent?.toLowerCase() || '';
+        const action = cmd.getAttribute('data-action') || '';
+        const match = !q || label.includes(q) || key.includes(q) || action.includes(q);
+        cmd.style.display = match ? 'flex' : 'none';
+    });
+}
+
+function executePaletteAction(action) {
+    closePalette();
+    switch (action) {
+        case 'focus-search':
+            document.getElementById('search-input')?.focus();
+            break;
+        case 'undo':
+            undoLastAction();
+            break;
+        case 'fullscreen':
+            toggleFullscreen();
+            break;
+        case 'filter-all':
+            setFilter('all');
+            break;
+        case 'filter-pending':
+            setFilter('pending');
+            break;
+        case 'filter-completed':
+            setFilter('completed');
+            break;
+        case 'filter-noean':
+            setFilter('noean');
+            break;
+        case 'tab-expedicao':
+            switchTab('expedicao');
+            break;
+        case 'tab-admin':
+            switchTab('administracao');
+            break;
+        case 'camera':
+            if (state.activeDespachanteId) startCameraScanner();
+            else showToast('Nenhuma Lista', 'Selecione uma lista primeiro.', 'error');
+            break;
+        case 'focus-barcode':
+            if (!elements.barcodeInput.disabled) elements.barcodeInput.focus();
+            break;
+        case 'export-logs':
+            exportLogsToCsv();
+            break;
+    }
+}
+
+function setFilter(filter) {
+    state.filter = filter;
+    document.querySelectorAll('[data-filter]').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-filter') === filter);
+    });
+    renderTable();
+}
+
+// Eventos da Paleta
+document.addEventListener('DOMContentLoaded', () => {
+    // Botão da paleta
+    const btnPalette = document.getElementById('btn-palette');
+    if (btnPalette) {
+        btnPalette.addEventListener('click', openPalette);
+    }
+    
+    // Fechar paleta
+    const btnClosePalette = document.getElementById('btn-close-palette');
+    if (btnClosePalette) {
+        btnClosePalette.addEventListener('click', closePalette);
+    }
+    
+    // Clique fora fecha
+    document.getElementById('palette-overlay')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closePalette();
+    });
+    
+    // Busca na paleta
+    const paletteSearch = document.getElementById('palette-search');
+    if (paletteSearch) {
+        paletteSearch.addEventListener('input', (e) => filterPaletteCommands(e.target.value));
+        paletteSearch.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closePalette();
+            if (e.key === 'Enter') {
+                const visible = document.querySelector('.palette-command[style*="display: flex"], .palette-command:not([style*="display: none"])');
+                if (visible) {
+                    executePaletteAction(visible.getAttribute('data-action'));
+                }
+            }
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const items = [...document.querySelectorAll('.palette-command')].filter(el => el.style.display !== 'none');
+                const currentIdx = items.indexOf(document.activeElement?.closest('.palette-command'));
+                const nextIdx = e.key === 'ArrowDown' 
+                    ? Math.min(currentIdx + 1, items.length - 1) 
+                    : Math.max(currentIdx - 1, 0);
+                if (items[nextIdx]) {
+                    items[nextIdx].querySelector('.cmd-label')?.focus();
+                    items[nextIdx].scrollIntoView({ block: 'nearest' });
+                }
+            }
+        });
+    }
+    
+    // Clique nos comandos
+    document.querySelectorAll('.palette-command').forEach(cmd => {
+        cmd.addEventListener('click', () => {
+            executePaletteAction(cmd.getAttribute('data-action'));
+        });
+    });
+});
+
+// -------------------------------------------------------
+// 9.2. ATALHOS DE TECLADO GLOBAIS (Ideia 1)
+// -------------------------------------------------------
+document.addEventListener('keydown', (e) => {
+    // Se um modal estiver ativo, não processa atalhos
+    if (state.errorModalActive || state.confirmModalActive) return;
+    
+    // Ctrl+K - Abrir paleta
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        openPalette();
+        return;
+    }
+    
+    // Se a paleta estiver aberta, não processa outros atalhos
+    if (paletteOpen) return;
+    
+    // Ctrl+Z - Desfazer
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        undoLastAction();
+        return;
+    }
+    
+    // Ctrl+F - Focar na busca
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        document.getElementById('search-input')?.focus();
+        return;
+    }
+    
+    // Ctrl+B - Focar no campo de leitura
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        if (!elements.barcodeInput.disabled) elements.barcodeInput.focus();
+        return;
+    }
+    
+    // Ctrl+C - Abrir câmera
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+        e.preventDefault();
+        if (state.activeDespachanteId) startCameraScanner();
+        return;
+    }
+    
+    // Ctrl+E - Exportar logs
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'E')) {
+        e.preventDefault();
+        exportLogsToCsv();
+        return;
+    }
+    
+    // Ctrl+1 / Ctrl+2 - Alternar abas
+    if ((e.ctrlKey || e.metaKey) && (e.key === '1')) {
+        e.preventDefault();
+        switchTab('expedicao');
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === '2')) {
+        e.preventDefault();
+        switchTab('administracao');
+        return;
+    }
+    
+    // Alt+1..4 - Filtros
+    if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const filterMap = { '1': 'all', '2': 'pending', '3': 'completed', '4': 'noean' };
+        if (filterMap[e.key]) {
+            e.preventDefault();
+            setFilter(filterMap[e.key]);
+            return;
+        }
+    }
+    
+    // F11 - Fullscreen
+    if (e.key === 'F11') {
+        e.preventDefault();
+        toggleFullscreen();
+        return;
+    }
+});
+
+// -------------------------------------------------------
+// 9.3. TELA CHEIA / FULLSCREEN (Ideia 10)
+// -------------------------------------------------------
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.() || 
+        document.documentElement.webkitRequestFullscreen?.() ||
+        document.documentElement.msRequestFullscreen?.();
+    } else {
+        document.exitFullscreen?.() || 
+        document.webkitExitFullscreen?.() ||
+        document.msExitFullscreen?.();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btnFs = document.getElementById('btn-fullscreen');
+    if (btnFs) {
+        btnFs.addEventListener('click', toggleFullscreen);
+    }
+});
+
+// -------------------------------------------------------
+// 9.4. BOTÃO DESFAZER (UNDO) (Ideia 4)
+// -------------------------------------------------------
+let undoStack = []; // Pilha de ações para desfazer
+
+function pushUndoState() {
+    // Salva o estado atual dos itens para poder reverter
+    const snapshot = state.items.map(item => ({
+        id: item.id,
+        quantidade: item.quantidade,
+        expedido: item.expedido,
+        dataExpedicao: item.dataExpedicao
+    }));
+    undoStack.push(snapshot);
+    
+    // Mantém no máximo 50 ações na pilha
+    if (undoStack.length > 50) undoStack.shift();
+    
+    // Habilita o botão
+    const btnUndo = document.getElementById('btn-undo');
+    if (btnUndo) btnUndo.disabled = false;
+}
+
+async function undoLastAction() {
+    if (undoStack.length === 0) {
+        showToast('Nada para desfazer', 'Nenhuma ação anterior registrada.', 'error');
+        return;
+    }
+    
+    const previousState = undoStack.pop();
+    
+    // Se não houver mais itens na pilha, desabilita o botão
+    if (undoStack.length === 0) {
+        const btnUndo = document.getElementById('btn-undo');
+        if (btnUndo) btnUndo.disabled = true;
+    }
+    
+    try {
+        // Restaura cada item ao estado anterior
+        for (const prev of previousState) {
+            const currentItem = state.items.find(item => item.id === prev.id);
+            if (currentItem) {
+                currentItem.quantidade = prev.quantidade;
+                currentItem.expedido = prev.expedido;
+                currentItem.dataExpedicao = prev.dataExpedicao;
+                
+                // Atualiza no IndexedDB
+                await db.updateItem(currentItem);
+            }
+        }
+        
+        // Remove o último log de auditoria (a ação que estamos desfazendo)
+        if (state.logs.length > 0) {
+            const lastLog = state.logs[0]; // logs são ordenados do mais recente para o mais antigo
+            if (lastLog && lastLog.id) {
+                try {
+                    const transaction = db.db.transaction(['logs'], 'readwrite');
+                    const store = transaction.objectStore('logs');
+                    store.delete(lastLog.id);
+                } catch (e) {
+                    console.warn('Não foi possível remover o log do undo:', e);
+                }
+            }
+        }
+        
+        // Recarrega os logs
+        state.logs = await db.getLogsByDespachante(state.activeDespachanteId);
+        
+        // Re-renderiza
+        renderTable();
+        updateProgress();
+        renderLogs();
+        
+        playSoundEffect('cancel');
+        showToast('Ação Desfeita', 'Última operação foi revertida com sucesso.', 'success');
+        
+        // Se o despachante estava concluído e desfizemos, reabre
+        if (state.items.some(item => !item.expedido)) {
+            const despachante = await db.getDespachante(state.activeDespachanteId);
+            if (despachante && despachante.concluido === 1) {
+                await db.marcarDespachanteConcluido(state.activeDespachanteId);
+                // Na verdade precisamos reverter: marcar como não concluído
+                // Como não temos função específica, vamos manipular diretamente
+                try {
+                    const transaction = db.db.transaction(['despachantes'], 'readwrite');
+                    const store = transaction.objectStore('despachantes');
+                    const getReq = store.get(state.activeDespachanteId);
+                    getReq.onsuccess = () => {
+                        const d = getReq.result;
+                        if (d) {
+                            d.concluido = 0;
+                            store.put(d);
+                        }
+                    };
+                } catch (e) {
+                    console.warn('Erro ao reabrir despachante:', e);
+                }
+                elements.expedicaoActiveTimer.setAttribute('data-concluido', '0');
+            }
+        }
+    } catch (e) {
+        console.error('Erro ao desfazer ação:', e);
+        showToast('Erro ao Desfazer', 'Não foi possível reverter a última ação.', 'error');
+    }
+}
+
+// Integração: chamar pushUndoState() antes de cada modificação
+// Vamos modificar as funções existentes para usar o undo
+
+// Monkey-patch: salva estado antes de processar leitura
+const originalProcessBarcode = processBarcodeRead;
+processBarcodeRead = async function(rawSku) {
+    pushUndoState();
+    return originalProcessBarcode.call(this, rawSku);
+};
+
+// Monkey-patch: salva estado antes de adicionar unidade manual
+const originalManualAdd = window.manualAddUnit;
+window.manualAddUnit = async function(id) {
+    pushUndoState();
+    return originalManualAdd.call(this, id);
+};
+
+// Monkey-patch: salva estado antes de confirmar sem EAN
+const originalConfirmYes = confirmNoEanYes;
+confirmNoEanYes = async function() {
+    pushUndoState();
+    return originalConfirmYes.call(this);
+};
+
+// Evento do botão Undo
+document.addEventListener('DOMContentLoaded', () => {
+    const btnUndo = document.getElementById('btn-undo');
+    if (btnUndo) {
+        btnUndo.addEventListener('click', undoLastAction);
+    }
+});
+
+// -------------------------------------------------------
+// 9.5. LANTERNA NO SCANNER (Ideia 19)
+// -------------------------------------------------------
+let torchEnabled = false;
+let torchTrack = null;
+
+function toggleTorch() {
+    if (!torchTrack) {
+        showToast('Câmera não ativa', 'Abra a câmera primeiro para usar a lanterna.', 'error');
+        return;
+    }
+    
+    torchEnabled = !torchEnabled;
+    
+    try {
+        // Tenta usar a API ImageCapture para acionar o flash
+        if (torchTrack.getCapabilities) {
+            const capabilities = torchTrack.getCapabilities();
+            if (capabilities.torch) {
+                torchTrack.applyConstraints({
+                    advanced: [{ torch: torchEnabled }]
+                }).then(() => {
+                    const btnTorch = document.getElementById('btn-torch');
+                    if (btnTorch) {
+                        btnTorch.classList.toggle('active', torchEnabled);
+                        btnTorch.textContent = torchEnabled ? '🔦 Lanterna ON' : '🔦 Lanterna';
+                    }
+                }).catch(err => {
+                    console.warn('Falha ao alternar lanterna:', err);
+                    showToast('Lanterna Indisponível', 'Seu dispositivo não suporta flash ou a câmera não permite.', 'error');
+                    torchEnabled = false;
+                });
+            } else {
+                showToast('Lanterna Indisponível', 'Este dispositivo não possui flash na câmera.', 'error');
+                torchEnabled = false;
+            }
+        } else {
+            showToast('Lanterna Indisponível', 'API de flash não suportada neste navegador.', 'error');
+            torchEnabled = false;
+        }
+    } catch (e) {
+        console.warn('Erro ao controlar lanterna:', e);
+        torchEnabled = false;
+    }
+}
+
+// Modifica o startCameraScanner para capturar a track de vídeo
+const originalStartCamera = startCameraScanner;
+startCameraScanner = function() {
+    if (state.scannerActive) return;
+    
+    elements.cameraScannerContainer.classList.add('active');
+    state.scannerActive = true;
+    elements.barcodeInput.disabled = true;
+    
+    // Reseta estado da lanterna
+    torchEnabled = false;
+    const btnTorch = document.getElementById('btn-torch');
+    if (btnTorch) {
+        btnTorch.classList.remove('active');
+        btnTorch.textContent = '🔦 Lanterna';
+        btnTorch.disabled = false;
+    }
+    
+    html5QrcodeScanner = new Html5Qrcode("camera-reader");
+    
+    const config = {
+        fps: 15,
+        qrbox: (width, height) => {
+            return { 
+                width: Math.min(width * 0.85, 340), 
+                height: Math.min(height * 0.55, 75) 
+            };
+        }
+    };
+
+    html5QrcodeScanner.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+            if (state.errorModalActive) return;
+            stopCameraScanner(true);
+            processBarcodeRead(decodedText);
+            setTimeout(() => {
+                if (!state.errorModalActive && elements.cameraScannerContainer.classList.contains('active')) {
+                    startCameraScanner();
+                }
+            }, 1500);
+        },
+        (errorMessage) => {}
+    ).then(() => {
+        // Tenta capturar a track de vídeo para controle da lanterna
+        try {
+            const videoElement = document.querySelector('#camera-reader video');
+            if (videoElement && videoElement.srcObject) {
+                const tracks = videoElement.srcObject.getVideoTracks();
+                if (tracks.length > 0) {
+                    torchTrack = tracks[0];
+                }
+            }
+        } catch (e) {
+            console.warn('Não foi possível capturar track de vídeo:', e);
+        }
+    }).catch(err => {
+        console.error('Erro ao iniciar câmera:', err);
+        showToast('Erro de Câmera', 'Não foi possível acessar a câmera do dispositivo.', 'error');
+        stopCameraScanner();
+    });
+};
+
+// Modifica stopCameraScanner para limpar a track
+const originalStopCamera = stopCameraScanner;
+stopCameraScanner = function(keepGuidedMode = false) {
+    torchEnabled = false;
+    torchTrack = null;
+    const btnTorch = document.getElementById('btn-torch');
+    if (btnTorch) {
+        btnTorch.classList.remove('active');
+        btnTorch.textContent = '🔦 Lanterna';
+        btnTorch.disabled = true;
+    }
+    return originalStopCamera.call(this, keepGuidedMode);
+};
+
+// Evento do botão da lanterna
+document.addEventListener('DOMContentLoaded', () => {
+    const btnTorch = document.getElementById('btn-torch');
+    if (btnTorch) {
+        btnTorch.addEventListener('click', toggleTorch);
+    }
+});
+
+// -------------------------------------------------------
+// 9.6. NOTIFICAÇÕES PUSH (Ideia 15)
+// -------------------------------------------------------
+function sendPushNotification(title, body) {
+    // Verifica se a API de notificação está disponível
+    if (!('Notification' in window)) return;
+    
+    // Verifica permissão
+    if (Notification.permission === 'granted') {
+        new Notification(title, {
+            body: body,
+            icon: 'favicon.svg',
+            tag: 'expedicao-notification'
+        });
+    } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                new Notification(title, {
+                    body: body,
+                    icon: 'favicon.svg',
+                    tag: 'expedicao-notification'
+                });
+            }
+        });
+    }
+}
+
+// Dispara notificação quando a lista é finalizada
+const originalCheckAllCompleted = checkAllCompleted;
+checkAllCompleted = async function() {
+    const result = await originalCheckAllCompleted.call(this);
+    
+    const totalPendentes = state.items.reduce((acc, item) => acc + item.quantidade, 0);
+    if (totalPendentes === 0 && state.items.length > 0) {
+        sendPushNotification(
+            '🎉 Expedição Finalizada!',
+            `Lista de "${state.activeDespachanteNome}" concluída com ${state.items.length} itens.`
+        );
+    }
+    return result;
+};
+
+// Dispara notificação quando o prazo está próximo (verificado a cada 30s)
+let deadlineWarningShown = false;
+setInterval(() => {
+    if (!state.activeDespachanteId) return;
+    
+    const timerEl = document.getElementById('expedicao-active-timer');
+    if (!timerEl) return;
+    
+    const isConcluido = timerEl.getAttribute('data-concluido') === '1';
+    if (isConcluido) return;
+    
+    const deadlineStr = timerEl.getAttribute('data-deadline');
+    if (!deadlineStr) return;
+    
+    const deadline = new Date(deadlineStr).getTime();
+    const now = new Date().getTime();
+    const diff = deadline - now;
+    
+    // Avisa quando faltar 5 minutos
+    if (diff > 0 && diff < 5 * 60 * 1000 && !deadlineWarningShown) {
+        deadlineWarningShown = true;
+        sendPushNotification(
+            '⏰ Prazo Próximo!',
+            `Faltam menos de 5 minutos para o prazo limite de "${state.activeDespachanteNome}".`
+        );
+    }
+    
+    // Reseta o aviso se o prazo passar ou mudar de despachante
+    if (diff > 10 * 60 * 1000) {
+        deadlineWarningShown = false;
+    }
+}, 30000);
+
+// -------------------------------------------------------
+// 9.7. MODO OFFLINE COM FILA DE SINCRONIZAÇÃO (Ideia 17)
+// -------------------------------------------------------
+class OfflineQueue {
+    constructor() {
+        this.queueName = 'expedicao_offline_queue';
+        this.isProcessing = false;
+    }
+    
+    async add(operation) {
+        const queue = await this.getQueue();
+        queue.push({
+            ...operation,
+            timestamp: new Date().toISOString(),
+            id: Date.now() + Math.random()
+        });
+        await this.saveQueue(queue);
+        
+        // Tenta processar imediatamente
+        this.process();
+    }
+    
+    async getQueue() {
+        try {
+            const data = localStorage.getItem(this.queueName);
+            return data ? JSON.parse(data) : [];
+        } catch {
+            return [];
+        }
+    }
+    
+    async saveQueue(queue) {
+        localStorage.setItem(this.queueName, JSON.stringify(queue));
+        this.updateBadge();
+    }
+    
+    updateBadge() {
+        this.getQueue().then(queue => {
+            const badge = document.getElementById('offline-queue-badge');
+            if (badge) {
+                if (queue.length > 0) {
+                    badge.textContent = queue.length;
+                    badge.style.display = 'flex';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        });
+    }
+    
+    async process() {
+        if (this.isProcessing) return;
+        this.isProcessing = true;
+        
+        // Verifica se está online
+        if (!navigator.onLine) {
+            this.isProcessing = false;
+            return;
+        }
+        
+        const queue = await this.getQueue();
+        if (queue.length === 0) {
+            this.isProcessing = false;
+            return;
+        }
+        
+        const failedOps = [];
+        
+        for (const op of queue) {
+            try {
+                // Tenta executar a operação via API
+                if (op.type === 'update_item') {
+                    await db.apiPost('update_item', { item: op.data });
+                } else if (op.type === 'add_log') {
+                    await db.apiPost('add_log', { log: op.data });
+                } else if (op.type === 'save_itens') {
+                    await db.apiPost('save_itens', { 
+                        itens: op.data.itens, 
+                        despachante_id: op.data.despachante_id 
+                    });
+                }
+            } catch (e) {
+                console.warn('Falha ao sincronizar operação offline:', e);
+                failedOps.push(op);
+            }
+        }
+        
+        // Salva apenas as que falharam
+        await this.saveQueue(failedOps);
+        this.isProcessing = false;
+        
+        if (failedOps.length === 0 && queue.length > 0) {
+            showToast('Sincronizado!', `${queue.length} operações enviadas ao servidor.`, 'success');
+        }
+    }
+}
+
+// Instância global da fila offline
+const offlineQueue = new OfflineQueue();
+
+// Monitora status da conexão
+window.addEventListener('online', () => {
+    showToast('Conexão Restaurada', 'Sincronizando dados pendentes...', 'success');
+    offlineQueue.process();
+    
+    // Recarrega dados
+    if (state.activeDespachanteId) {
+        loadDespachanteData(state.activeDespachanteId);
+    }
+});
+
+window.addEventListener('offline', () => {
+    showToast('Modo Offline', 'Conexão perdida. Operações serão salvas localmente.', 'error');
+});
+
+// Integração: toda operação de escrita no banco passa pela fila offline
+// quando não está em localhost
+const originalUpdateItem = db.updateItem;
+db.updateItem = async function(item) {
+    if (!this.isLocal && !navigator.onLine) {
+        await offlineQueue.add({
+            type: 'update_item',
+            data: item
+        });
+    }
+    return originalUpdateItem.call(this, item);
+};
+
+const originalAddLog = db.addLog;
+db.addLog = async function(logEntry) {
+    if (!this.isLocal && !navigator.onLine) {
+        await offlineQueue.add({
+            type: 'add_log',
+            data: logEntry
+        });
+    }
+    return originalAddLog.call(this, logEntry);
+};
+
+const originalSaveItens = db.saveItens;
+db.saveItens = async function(itens, despachanteId) {
+    if (!this.isLocal && !navigator.onLine) {
+        await offlineQueue.add({
+            type: 'save_itens',
+            data: { itens, despachante_id: despachanteId }
+        });
+    }
+    return originalSaveItens.call(this, itens, despachanteId);
+};
+
+// Adiciona badge de fila offline no header
+document.addEventListener('DOMContentLoaded', () => {
+    const headerActions = document.querySelector('.header-actions');
+    if (headerActions) {
+        const badge = document.createElement('span');
+        badge.id = 'offline-queue-badge';
+        badge.style.cssText = 'display:none; background:var(--warning); color:#000; font-size:10px; font-weight:700; padding:2px 6px; border-radius:999px; align-items:center; justify-content:center; min-width:18px; height:18px;';
+        badge.title = 'Operações pendentes de sincronização';
+        headerActions.insertBefore(badge, headerActions.firstChild);
+    }
+    
+    // Inicializa badge
+    offlineQueue.updateBadge();
+});
+
+// -------------------------------------------------------
+// 9.8. SCANNER MÃOS-LIVRES (Ideia 21)
+// -------------------------------------------------------
+let handsFreeMode = false;
+
+function toggleHandsFree() {
+    handsFreeMode = !handsFreeMode;
+    
+    if (handsFreeMode) {
+        // Se não há lista ativa, não ativa
+        if (!state.activeDespachanteId) {
+            handsFreeMode = false;
+            showToast('Sem lista ativa', 'Selecione uma lista primeiro.', 'error');
+            return;
+        }
+        // Abre a câmera automaticamente
+        startCameraScanner();
+        showToast('Modo Mãos-Livres Ativo', 'Aproxime o código da câmera. A leitura é automática!', 'success');
+        
+        // Mostra indicador visual no header
+        const indicator = document.getElementById('hands-free-indicator') || createHandsFreeIndicator();
+        indicator.style.display = 'flex';
+    } else {
+        stopCameraScanner();
+        showToast('Modo Mãos-Livres Desativado', 'Voltando ao modo manual.', 'info');
+        
+        const indicator = document.getElementById('hands-free-indicator');
+        if (indicator) indicator.style.display = 'none';
+    }
+}
+
+function createHandsFreeIndicator() {
+    const indicator = document.createElement('div');
+    indicator.id = 'hands-free-indicator';
+    indicator.style.cssText = 'position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:100001; background:rgba(16,185,129,0.9); color:#000; padding:8px 18px; border-radius:999px; font-size:13px; font-weight:700; display:flex; align-items:center; gap:8px; box-shadow:0 4px 20px rgba(16,185,129,0.4); animation:pulse 2s infinite;';
+    indicator.innerHTML = `
+        <span style="width:8px;height:8px;background:#fff;border-radius:50%;display:inline-block;animation:pulse 1s infinite;"></span>
+        Mãos-Livres Ativo
+        <button onclick="toggleHandsFree()" style="background:rgba(0,0,0,0.2);border:none;color:#fff;padding:4px 8px;border-radius:6px;cursor:pointer;font-weight:700;">✕</button>
+    `;
+    document.body.appendChild(indicator);
+    return indicator;
+}
+
+// Modifica o scanner para ficar contínuo no modo mãos-livres
+const originalStartCameraMao = startCameraScanner;
+startCameraScanner = function() {
+    if (state.scannerActive) return;
+    
+    elements.cameraScannerContainer.classList.add('active');
+    state.scannerActive = true;
+    elements.barcodeInput.disabled = true;
+    
+    // Reseta estado da lanterna
+    torchEnabled = false;
+    const btnTorch = document.getElementById('btn-torch');
+    if (btnTorch) {
+        btnTorch.classList.remove('active');
+        btnTorch.textContent = '🔦 Lanterna';
+        btnTorch.disabled = false;
+    }
+    
+    html5QrcodeScanner = new Html5Qrcode("camera-reader");
+    
+    const config = {
+        fps: 15,
+        qrbox: (width, height) => {
+            return { 
+                width: Math.min(width * 0.85, 340), 
+                height: Math.min(height * 0.55, 75) 
+            };
+        }
+    };
+
+    html5QrcodeScanner.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+            if (state.errorModalActive) return;
+            
+            if (handsFreeMode) {
+                // Modo mãos-livres: pausa, processa, reinicia automaticamente
+                html5QrcodeScanner.pause();
+                processBarcodeRead(decodedText);
+                setTimeout(() => {
+                    if (handsFreeMode && !state.errorModalActive && elements.cameraScannerContainer.classList.contains('active')) {
+                        try { html5QrcodeScanner.resume(); } catch(e) {}
+                    }
+                }, 2000);
+            } else {
+                // Modo normal: comportamento original
+                stopCameraScanner(true);
+                processBarcodeRead(decodedText);
+                setTimeout(() => {
+                    if (!state.errorModalActive && elements.cameraScannerContainer.classList.contains('active')) {
+                        startCameraScanner();
+                    }
+                }, 1500);
+            }
+        },
+        (errorMessage) => {}
+    ).then(() => {
+        try {
+            const videoElement = document.querySelector('#camera-reader video');
+            if (videoElement && videoElement.srcObject) {
+                const tracks = videoElement.srcObject.getVideoTracks();
+                if (tracks.length > 0) {
+                    torchTrack = tracks[0];
+                }
+            }
+        } catch (e) {}
+    }).catch(err => {
+        console.error('Erro ao iniciar câmera:', err);
+        showToast('Erro de Câmera', 'Não foi possível acessar a câmera do dispositivo.', 'error');
+        stopCameraScanner();
+    });
+};
+
+// Modifica stopCameraScanner para limpar modo mãos-livres
+const originalStopCameraMao = stopCameraScanner;
+stopCameraScanner = function(keepGuidedMode = false) {
+    torchEnabled = false;
+    torchTrack = null;
+    const btnTorch = document.getElementById('btn-torch');
+    if (btnTorch) {
+        btnTorch.classList.remove('active');
+        btnTorch.textContent = '🔦 Lanterna';
+        btnTorch.disabled = true;
+    }
+    
+    // Limpa indicador mãos-livres se parou a câmera
+    if (handsFreeMode && !keepGuidedMode) {
+        handsFreeMode = false;
+        const indicator = document.getElementById('hands-free-indicator');
+        if (indicator) indicator.style.display = 'none';
+    }
+    
+    if (!state.scannerActive) return;
+    state.scannerActive = false;
+    elements.cameraScannerContainer.classList.remove('active');
+    elements.barcodeInput.disabled = false;
+    
+    if (state.focusedItemId && !keepGuidedMode) {
+        deactivateFocusedItemMode();
+    }
+    
+    if (html5QrcodeScanner) {
+        html5QrcodeScanner.stop().then(() => {
+            html5QrcodeScanner = null;
+        }).catch(err => {
+            console.error('Erro ao parar scanner:', err);
+            html5QrcodeScanner = null;
+        });
+    }
+};
+
+// Adiciona toggle mãos-livres no reader card
+document.addEventListener('DOMContentLoaded', () => {
+    const readerOptions = document.querySelector('.reader-options');
+    if (readerOptions) {
+        const btnHandsFree = document.createElement('button');
+        btnHandsFree.id = 'btn-hands-free';
+        btnHandsFree.className = 'btn btn-outline w-full';
+        btnHandsFree.disabled = true;
+        btnHandsFree.innerHTML = '✋ Mãos-Livres';
+        btnHandsFree.addEventListener('click', toggleHandsFree);
+        readerOptions.appendChild(btnHandsFree);
+    }
+    
+    // Habilita botão junto com os outros
+    const origLoad = loadDespachanteData;
+    loadDespachanteData = async function(id) {
+        await origLoad.call(this, id);
+        const btnHF = document.getElementById('btn-hands-free');
+        if (btnHF) {
+            btnHF.disabled = !id;
+        }
+    };
+});
+
+// -------------------------------------------------------
+// 9.9. CONFIRMAÇÃO POR VOZ — TTS (Ideia 22)
+// -------------------------------------------------------
+let ttsEnabled = true;
+let ttsVoice = null;
+let ttsUtterance = null;
+
+function toggleTTS() {
+    ttsEnabled = !ttsEnabled;
+    localStorage.setItem('expedicao_tts', ttsEnabled ? '1' : '0');
+    
+    const btnTTS = document.getElementById('btn-tts-toggle');
+    if (btnTTS) {
+        btnTTS.classList.toggle('active', ttsEnabled);
+        btnTTS.querySelector('span').textContent = ttsEnabled ? '🔊' : '🔇';
+        btnTTS.title = ttsEnabled ? 'Confirmação por Voz (Clique para desativar)' : 'Confirmação por Voz (Clique para ativar)';
+    }
+    
+    showToast(ttsEnabled ? 'Voz Ativada' : 'Voz Desativada', 
+        ttsEnabled ? 'O sistema falará o nome dos produtos após cada leitura.' : 'Confirmação por voz desligada.', 'success');
+}
+
+function speakText(text) {
+    if (!ttsEnabled) return;
+    if (!('speechSynthesis' in window)) return;
+    
+    // Cancela fala anterior se ainda estiver falando
+    if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+    }
+    
+    // Seleciona voz em português se disponível
+    if (!ttsVoice) {
+        const voices = speechSynthesis.getVoices();
+        ttsVoice = voices.find(v => v.lang.startsWith('pt')) || voices[0];
+    }
+    
+    ttsUtterance = new SpeechSynthesisUtterance(text);
+    ttsUtterance.lang = 'pt-BR';
+    ttsUtterance.rate = 1.1;
+    ttsUtterance.pitch = 1.0;
+    ttsUtterance.volume = 1.0;
+    if (ttsVoice) ttsUtterance.voice = ttsVoice;
+    
+    speechSynthesis.speak(ttsUtterance);
+}
+
+// Integra TTS nas funções de feedback
+const originalProcessTTS = processBarcodeRead;
+processBarcodeRead = async function(rawSku) {
+    const result = await originalProcessTTS.call(this, rawSku);
+    
+    // Fala o último item processado
+    if (ttsEnabled && state.items.length > 0) {
+        const lastExpedido = state.items.find(item => item.dataExpedicao && new Date(item.dataExpedicao).getTime() > Date.now() - 2000);
+        if (lastExpedido) {
+            const text = `${lastExpedido.descricao}. Restam ${lastExpedido.quantidade} unidades.`;
+            speakText(text);
+        }
+    }
+    return result;
+};
+
+const originalManualTTS = window.manualAddUnit;
+window.manualAddUnit = async function(id) {
+    await originalManualTTS.call(this, id);
+    const item = state.items.find(i => i.id === id);
+    if (item && ttsEnabled) {
+        speakText(`${item.descricao}. Restam ${item.quantidade} unidades.`);
+    }
+};
+
+// Inicializa TTS
+document.addEventListener('DOMContentLoaded', () => {
+    // Carrega preferência salva
+    const savedTTS = localStorage.getItem('expedicao_tts');
+    if (savedTTS === '0') {
+        ttsEnabled = false;
+    }
+    
+    const btnTTS = document.getElementById('btn-tts-toggle');
+    if (btnTTS) {
+        btnTTS.classList.toggle('active', ttsEnabled);
+        btnTTS.querySelector('span').textContent = ttsEnabled ? '🔊' : '🔇';
+        btnTTS.addEventListener('click', toggleTTS);
+    }
+    
+    // Carrega vozes disponíveis
+    if ('speechSynthesis' in window) {
+        speechSynthesis.getVoices(); // Força carregamento
+        setTimeout(() => {
+            ttsVoice = speechSynthesis.getVoices().find(v => v.lang.startsWith('pt')) || null;
+        }, 500);
+    }
+});
+
+// -------------------------------------------------------
+// 9.10. MODO TURBO (Ideia 28)
+// -------------------------------------------------------
+let turboMode = false;
+
+function toggleTurboMode() {
+    turboMode = !turboMode;
+    localStorage.setItem('expedicao_turbo', turboMode ? '1' : '0');
+    
+    document.body.classList.toggle('turbo-mode', turboMode);
+    
+    const btnTurbo = document.getElementById('btn-turbo-toggle');
+    if (btnTurbo) {
+        btnTurbo.classList.toggle('active', turboMode);
+        btnTurbo.querySelector('span').textContent = turboMode ? '⚡' : '⚡';
+        btnTurbo.title = turboMode ? 'Modo Turbo Ativo (animações desligadas)' : 'Modo Turbo (sem animações)';
+    }
+    
+    showToast(turboMode ? 'Modo Turbo Ativado' : 'Modo Turbo Desativado', 
+        turboMode ? 'Animações desligadas para máxima performance.' : 'Animações restauradas.', 'success');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const savedTurbo = localStorage.getItem('expedicao_turbo');
+    if (savedTurbo === '1') {
+        turboMode = true;
+        document.body.classList.add('turbo-mode');
+    }
+    
+    const btnTurbo = document.getElementById('btn-turbo-toggle');
+    if (btnTurbo) {
+        btnTurbo.classList.toggle('active', turboMode);
+        btnTurbo.addEventListener('click', toggleTurboMode);
+    }
+});
+
+// -------------------------------------------------------
+// 9.11. EXPORTAR ROMANEIO (Ideia 29)
+// -------------------------------------------------------
+function printRomaneio() {
+    if (!state.activeDespachanteId || state.items.length === 0) {
+        showToast('Nada para imprimir', 'Selecione uma lista com itens primeiro.', 'error');
+        return;
+    }
+    
+    // Agrupa itens por nota fiscal
+    const grupos = {};
+    state.items.forEach(item => {
+        if (!grupos[item.nota]) grupos[item.nota] = [];
+        grupos[item.nota].push(item);
+    });
+    
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR');
+    
+    // Monta HTML do romaneio
+    let itensHtml = '';
+    Object.keys(grupos).forEach(nota => {
+        const itens = grupos[nota];
+        itensHtml += `<tr><td colspan="5" style="font-weight:700;padding-top:8px;font-size:11px;">📄 ${nota}</td></tr>`;
+        itens.forEach(item => {
+            const status = item.expedido ? '✅' : '⬜';
+            itensHtml += `<tr>
+                <td>${item.sku}</td>
+                <td>${item.descricao.substring(0, 28)}</td>
+                <td>${item.quantidade}</td>
+                <td>${item.quantidadeOriginal}</td>
+                <td>${status}</td>
+            </tr>`;
+        });
+    });
+    
+    const totalItens = state.items.length;
+    const totalPecas = state.items.reduce((acc, item) => acc + item.quantidadeOriginal, 0);
+    const expedidas = state.items.reduce((acc, item) => acc + (item.quantidadeOriginal - item.quantidade), 0);
+    const pct = totalPecas > 0 ? Math.round((expedidas / totalPecas) * 100) : 0;
+    
+    const romaneioHtml = `
+    <div class="romaneio-page">
+        <h1>📋 ROMANEIO</h1>
+        <div class="romaneio-sub">
+            <strong>${state.activeDespachanteNome}</strong><br>
+            ${dateStr}<br>
+            ${totalItens} itens · ${expedidas}/${totalPecas} peças (${pct}%)
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Produto</th>
+                    <th>Rest.</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${itensHtml}
+            </tbody>
+        </table>
+        <div class="romaneio-qr">
+            ● Acesse: ${window.location.origin}${window.location.pathname} para conferência digital ●
+        </div>
+        <div class="romaneio-footer">
+            Documento gerado em ${dateStr} · Expedição Inteligente
+        </div>
+    </div>`;
+    
+    // Abre nova janela para impressão
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Romaneio - ${state.activeDespachanteNome}</title>
+            <style>
+                body { margin:0; padding:0; background:#fff; }
+                @page { size: 80mm auto; margin: 5mm; }
+                @media print {
+                    body { margin:0; padding:0; }
+                }
+            </style>
+        </head>
+        <body>
+            ${romaneioHtml}
+            <script>
+                window.onload = function() { window.print(); window.close(); }
+            <\/script>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+}
+
+// Adiciona botão de romaneio
+document.addEventListener('DOMContentLoaded', () => {
+    const progressCard = document.getElementById('progress-card');
+    if (progressCard) {
+        const actionsRow = progressCard.querySelector('.despachante-actions-row');
+        if (actionsRow) {
+            const btnRomaneio = document.createElement('button');
+            btnRomaneio.id = 'btn-romaneio';
+            btnRomaneio.className = 'btn btn-secondary';
+            btnRomaneio.style.cssText = 'flex:1; padding:10px 6px; font-size:12.5px; margin:0; white-space:nowrap;';
+            btnRomaneio.textContent = '🖨️ Romaneio';
+            btnRomaneio.addEventListener('click', printRomaneio);
+            actionsRow.insertBefore(btnRomaneio, actionsRow.children[0]);
+        }
+    }
+});
+
+// -------------------------------------------------------
+// 9.12. BACKUP AUTOMÁTICO (Ideia 30)
+// -------------------------------------------------------
+class BackupManager {
+    constructor() {
+        this.backupKey = 'expedicao_backup';
+        this.restoreKey = 'expedicao_restore_point';
+        this.intervalId = null;
+    }
+    
+    start() {
+        // Faz backup a cada 5 minutos
+        this.intervalId = setInterval(() => this.save(), 5 * 60 * 1000);
+        
+        // Também salva antes de fechar a janela
+        window.addEventListener('beforeunload', () => this.save());
+    }
+    
+    stop() {
+        if (this.intervalId) {
+            clearInterval(this.intervalId);
+            this.intervalId = null;
+        }
+    }
+    
+    async save() {
+        try {
+            if (!state.activeDespachanteId) return;
+            
+            const backup = {
+                timestamp: new Date().toISOString(),
+                despachanteId: state.activeDespachanteId,
+                despachanteNome: state.activeDespachanteNome,
+                items: state.items.map(item => ({
+                    id: item.id,
+                    nota: item.nota,
+                    ec: item.ec,
+                    cliente: item.cliente,
+                    canal: item.canal,
+                    descricao: item.descricao,
+                    sku: item.sku,
+                    ean: item.ean,
+                    temEan: item.temEan,
+                    quantidade: item.quantidade,
+                    quantidadeOriginal: item.quantidadeOriginal,
+                    expedido: item.expedido,
+                    dataExpedicao: item.dataExpedicao
+                })),
+                logs: state.logs.slice(0, 50) // Últimos 50 logs
+            };
+            
+            localStorage.setItem(this.backupKey, JSON.stringify(backup));
+        } catch (e) {
+            console.warn('Erro ao salvar backup automático:', e);
+        }
+    }
+    
+    hasBackup() {
+        const data = localStorage.getItem(this.backupKey);
+        return data && JSON.parse(data).items && JSON.parse(data).items.length > 0;
+    }
+    
+    getBackupInfo() {
+        try {
+            const data = localStorage.getItem(this.backupKey);
+            if (!data) return null;
+            const backup = JSON.parse(data);
+            return {
+                data: backup.timestamp ? new Date(backup.timestamp).toLocaleString('pt-BR') : 'Desconhecida',
+                itens: backup.items?.length || 0,
+                despachante: backup.despachanteNome || '---'
+            };
+        } catch {
+            return null;
+        }
+    }
+    
+    async restore() {
+        try {
+            const data = localStorage.getItem(this.backupKey);
+            if (!data) {
+                showToast('Nenhum Backup', 'Não há backup disponível para restaurar.', 'error');
+                return false;
+            }
+            
+            const backup = JSON.parse(data);
+            
+            // Verifica se os itens ainda existem no IndexedDB
+            if (backup.despachanteId) {
+                const despachante = await db.getDespachante(backup.despachanteId);
+                if (despachante) {
+                    // Restaura os itens no state
+                    state.items = backup.items;
+                    state.activeDespachanteId = backup.despachanteId;
+                    state.activeDespachanteNome = backup.despachanteNome;
+                    state.logs = backup.logs || [];
+                    
+                    // Re-renderiza
+                    renderTable();
+                    updateProgress();
+                    renderLogs();
+                    
+                    showToast('Backup Restaurado', `${backup.items.length} itens recuperados do backup automático.`, 'success');
+                    return true;
+                } else {
+                    showToast('Despachante não encontrado', 'O despachante do backup foi removido. Crie uma nova lista.', 'error');
+                    return false;
+                }
+            }
+        } catch (e) {
+            console.error('Erro ao restaurar backup:', e);
+            showToast('Erro na Restauração', 'Não foi possível ler o backup.', 'error');
+            return false;
+        }
+    }
+}
+
+const backupManager = new BackupManager();
+
+// Botão de restaurar backup na administração
+document.addEventListener('DOMContentLoaded', () => {
+    // Adiciona botão de restaurar backup na aba de administração
+    const importCard = document.getElementById('import-card');
+    if (importCard) {
+        const restoreBtn = document.createElement('button');
+        restoreBtn.id = 'btn-restore-backup';
+        restoreBtn.className = 'btn btn-outline w-full';
+        restoreBtn.style.marginTop = '8px';
+        restoreBtn.innerHTML = '💾 Restaurar Backup Automático';
+        
+        // Verifica se há backup e atualiza texto
+        function updateRestoreBtn() {
+            const info = backupManager.getBackupInfo();
+            if (info) {
+                restoreBtn.innerHTML = `💾 Restaurar Backup (${info.despachante} - ${info.itens} itens - ${info.data})`;
+                restoreBtn.disabled = false;
+            } else {
+                restoreBtn.innerHTML = '💾 Nenhum Backup Disponível';
+                restoreBtn.disabled = true;
+            }
+        }
+        
+        restoreBtn.addEventListener('click', async () => {
+            await backupManager.restore();
+            updateRestoreBtn();
+        });
+        
+        importCard.appendChild(restoreBtn);
+        
+        // Atualiza a cada 10s
+        setInterval(updateRestoreBtn, 10000);
+        setTimeout(updateRestoreBtn, 500);
+    }
+    
+    // Inicia backup automático
+    backupManager.start();
+});
+
 // Pausa a sincronização quando a janela do navegador perde o foco (economiza CPU/Servidor)
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
         stopBackgroundSync();
+        backupManager.save(); // Salva backup ao sair
     } else {
         startBackgroundSync();
+        offlineQueue.process();
     }
 });

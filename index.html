@@ -36,6 +36,22 @@
                 </div>
             </div>
             <div class="header-actions">
+                <!-- Botão TTS (Voz) -->
+                <button class="btn btn-icon" id="btn-tts-toggle" title="Confirmação por Voz" style="font-size:16px;">
+                    <span>🔊</span>
+                </button>
+                <!-- Botão Modo Turbo -->
+                <button class="btn btn-icon" id="btn-turbo-toggle" title="Modo Turbo (sem animações)" style="font-size:16px;">
+                    <span>⚡</span>
+                </button>
+                <!-- Botão Fullscreen -->
+                <button class="btn btn-icon" id="btn-fullscreen" title="Tela Cheia (F11)" style="font-size:18px;">
+                    <span>⛶</span>
+                </button>
+                <!-- Botão Paleta de Comandos -->
+                <button class="btn btn-icon" id="btn-palette" title="Paleta de Comandos (Ctrl+K)" style="font-size:18px; font-weight:700;">
+                    <span>⌘</span>
+                </button>
                 <div class="custom-sound-dropdown" id="sound-dropdown-container">
                     <button class="btn btn-icon dropdown-sound-trigger-btn" id="sound-dropdown-trigger" title="Configurar Som">
                         <span class="icon" id="active-sound-icon">🔊</span>
@@ -115,6 +131,9 @@
                                 <button id="btn-view-pdf" class="btn btn-secondary" style="flex: 1; padding: 10px 6px; font-size: 12.5px; margin: 0; white-space: nowrap;">
                                     📄 PDF Original
                                 </button>
+                                <button id="btn-undo" class="btn btn-outline" style="flex: 1; padding: 10px 6px; font-size: 12.5px; margin: 0; white-space: nowrap;" disabled title="Desfazer última ação (Ctrl+Z)">
+                                    ↩️ Desfazer
+                                </button>
                                 <button id="btn-reset" class="btn btn-danger-outline" style="flex: 1; padding: 10px 6px; font-size: 12.5px; margin: 0; white-space: nowrap;">
                                     🗑 Excluir Lista
                                 </button>
@@ -148,11 +167,12 @@
                                     <button class="btn btn-tab active" data-filter="all">Todos</button>
                                     <button class="btn btn-tab" data-filter="pending">Pendentes</button>
                                     <button class="btn btn-tab" data-filter="completed">Expedidos</button>
+                                    <button class="btn btn-tab" data-filter="noean">Sem EAN</button>
                                 </div>
                             </div>
                             
                             <div class="search-box-wrapper">
-                                <input type="text" id="search-input" placeholder="Buscar por SKU, descrição ou cliente..." autocomplete="off">
+                                <input type="text" id="search-input" placeholder="Buscar por SKU, descrição ou cliente... (Ctrl+F)" autocomplete="off">
                             </div>
 
                             <!-- Fila Vazia -->
@@ -295,12 +315,78 @@
                 <span class="toast-desc"></span>
             </div>
         </div>
+
+        <!-- Paleta de Comandos (Overlay) -->
+        <div id="palette-overlay" style="display:none;">
+            <div id="palette-modal">
+                <div class="palette-header">
+                    <span class="palette-title">Paleta de Comandos</span>
+                    <button id="btn-close-palette" class="palette-close">✕</button>
+                </div>
+                <div class="palette-search-wrapper">
+                    <input type="text" id="palette-search" placeholder="Digite um comando..." autocomplete="off">
+                </div>
+                <div class="palette-commands-list" id="palette-commands-list">
+                    <div class="palette-command" data-action="focus-search">
+                        <span class="cmd-key">Ctrl+F</span>
+                        <span class="cmd-label">Buscar na lista</span>
+                    </div>
+                    <div class="palette-command" data-action="undo">
+                        <span class="cmd-key">Ctrl+Z</span>
+                        <span class="cmd-label">Desfazer última ação</span>
+                    </div>
+                    <div class="palette-command" data-action="fullscreen">
+                        <span class="cmd-key">F11</span>
+                        <span class="cmd-label">Alternar Tela Cheia</span>
+                    </div>
+                    <div class="palette-command" data-action="filter-all">
+                        <span class="cmd-key">Alt+1</span>
+                        <span class="cmd-label">Filtro: Todos</span>
+                    </div>
+                    <div class="palette-command" data-action="filter-pending">
+                        <span class="cmd-key">Alt+2</span>
+                        <span class="cmd-label">Filtro: Pendentes</span>
+                    </div>
+                    <div class="palette-command" data-action="filter-completed">
+                        <span class="cmd-key">Alt+3</span>
+                        <span class="cmd-label">Filtro: Expedidos</span>
+                    </div>
+                    <div class="palette-command" data-action="filter-noean">
+                        <span class="cmd-key">Alt+4</span>
+                        <span class="cmd-label">Filtro: Sem EAN</span>
+                    </div>
+                    <div class="palette-command" data-action="tab-expedicao">
+                        <span class="cmd-key">Ctrl+1</span>
+                        <span class="cmd-label">Aba: Expedição</span>
+                    </div>
+                    <div class="palette-command" data-action="tab-admin">
+                        <span class="cmd-key">Ctrl+2</span>
+                        <span class="cmd-label">Aba: Administração</span>
+                    </div>
+                    <div class="palette-command" data-action="camera">
+                        <span class="cmd-key">Ctrl+C</span>
+                        <span class="cmd-label">Abrir Câmera Scanner</span>
+                    </div>
+                    <div class="palette-command" data-action="focus-barcode">
+                        <span class="cmd-key">Ctrl+B</span>
+                        <span class="cmd-label">Focar no campo de leitura</span>
+                    </div>
+                    <div class="palette-command" data-action="export-logs">
+                        <span class="cmd-key">Ctrl+E</span>
+                        <span class="cmd-label">Exportar Logs (CSV)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Scanner da Câmera (Inicialmente oculto, posicionado na raiz do body para sobreposição total) -->
     <div id="camera-scanner-container">
         <div id="camera-reader"></div>
-        <button id="btn-stop-camera" class="btn btn-danger w-full mt-3">Fechar Câmera</button>
+        <div class="camera-actions-row">
+            <button id="btn-torch" class="btn btn-outline" style="flex:1;" disabled>🔦 Lanterna</button>
+            <button id="btn-stop-camera" class="btn btn-danger" style="flex:1;">Fechar Câmera</button>
+        </div>
     </div>
 
     <!-- Modal de Alerta de Erro Persistente (Trava para confirmação de erros) -->
