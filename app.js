@@ -4001,6 +4001,532 @@ document.addEventListener('DOMContentLoaded', () => {
     backupManager.start();
 });
 
+// ==========================================
+// 9.13. FLASH VERDE/VERMELHO NA LEITURA (Ideia 3.3)
+// ==========================================
+let flashEnabled = true;
+
+function showReaderFlash(type) {
+    if (!flashEnabled) return;
+    
+    const flash = document.createElement('div');
+    flash.className = `reader-flash ${type}`;
+    document.body.appendChild(flash);
+    
+    setTimeout(() => {
+        if (flash.parentNode) flash.parentNode.removeChild(flash);
+    }, 500);
+}
+
+// Integra flash nas funções de leitura
+const originalFlashProcess = processBarcodeRead;
+processBarcodeRead = async function(rawSku) {
+    const result = await originalFlashProcess.call(this, rawSku);
+    
+    // Verifica se houve match ou erro pelo toast exibido
+    // O flash é disparado junto com o feedback
+    return result;
+};
+
+// Dispara flash manualmente nos pontos certos
+const originalShowComplete = checkAllCompleted;
+checkAllCompleted = async function() {
+    const result = await originalShowComplete.call(this);
+    if (state.items.every(item => item.expedido)) {
+        showReaderFlash('success');
+    }
+    return result;
+};
+
+// Configuração do flash
+function setupFlashConfig() {
+    const configFlash = document.getElementById('config-flash');
+    if (configFlash) {
+        const saved = localStorage.getItem('expedicao_flash');
+        flashEnabled = saved !== 'false';
+        configFlash.checked = flashEnabled;
+        
+        configFlash.addEventListener('change', () => {
+            flashEnabled = configFlash.checked;
+            localStorage.setItem('expedicao_flash', flashEnabled ? '1' : '0');
+        });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', setupFlashConfig);
+
+// -------------------------------------------------------
+// 9.14. NOTIFICAÇÃO WHATSAPP (Ideia 3.4)
+// -------------------------------------------------------
+let whatsappEnabled = false;
+let whatsappNumber = '';
+
+function sendWhatsApp(message) {
+    if (!whatsappEnabled || !whatsappNumber) return;
+    
+    const encoded = encodeURIComponent(message);
+    const url = `https://wa.me/${whatsappNumber}?text=${encoded}`;
+    window.open(url, '_blank');
+}
+
+function setupWhatsAppConfig() {
+    const configWA = document.getElementById('config-whatsapp');
+    const configNumber = document.getElementById('config-whatsapp-number');
+    const numberInput = document.getElementById('whatsapp-number-input');
+    
+    if (configWA && numberInput) {
+        // Carrega configurações salvas
+        const saved = localStorage.getItem('expedicao_whatsapp');
+        whatsappEnabled = saved === '1';
+        configWA.checked = whatsappEnabled;
+        
+        const savedNumber = localStorage.getItem('expedicao_whatsapp_number') || '';
+        whatsappNumber = savedNumber;
+        numberInput.value = savedNumber;
+        
+        if (configNumber) {
+            configNumber.style.display = whatsappEnabled ? 'block' : 'none';
+        }
+        
+        configWA.addEventListener('change', () => {
+            whatsappEnabled = configWA.checked;
+            localStorage.setItem('expedicao_whatsapp', whatsappEnabled ? '1' : '0');
+            if (configNumber) {
+                configNumber.style.display = whatsappEnabled ? 'block' : 'none';
+            }
+        });
+        
+        numberInput.addEventListener('input', () => {
+            whatsappNumber = numberInput.value.replace(/\D/g, '');
+            localStorage.setItem('expedicao_whatsapp_number', whatsappNumber);
+        });
+    }
+}
+
+// Integra WhatsApp no checkAllCompleted
+const originalWACheck = checkAllCompleted;
+checkAllCompleted = async function() {
+    const result = await originalWACheck.call(this);
+    
+    const totalPendentes = state.items.reduce((acc, item) => acc + item.quantidade, 0);
+    if (totalPendentes === 0 && state.items.length > 0 && whatsappEnabled && whatsappNumber) {
+        const totalItens = state.items.length;
+        const totalPecas = state.items.reduce((acc, item) => acc + item.quantidadeOriginal, 0);
+        const nome = state.activeDespachanteNome || 'Despachante';
+        
+        // Calcula tempo gasto
+        const primeiroLog = state.logs[state.logs.length - 1];
+        const ultimoLog = state.logs[0];
+        let tempoTexto = '';
+        if (primeiroLog && ultimoLog) {
+            const inicio = new Date(primeiroLog.timestamp);
+            const fim = new Date(ultimoLog.timestamp);
+            const diffMin = Math.round((fim - inicio) / 60000);
+            if (diffMin > 0) {
+                const h = Math.floor(diffMin / 60);
+                const m = diffMin % 60;
+                tempoTexto = h > 0 ? `${h}h${m}min` : `${m}min`;
+            }
+        }
+        
+        const prazo = document.getElementById('expedicao-active-timer')?.getAttribute('data-deadline') || '';
+        const prazoTexto = prazo ? new Date(prazo).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '---';
+        
+        const mensagem = `🎉 *Expedição Finalizada!*\n\n📋 Lista: ${nome}\n📦 Itens: ${totalItens}\n📦 Peças: ${totalPecas}\n⏱️ Tempo: ${tempoTexto || '---'}\n⏰ Prazo: ${prazoTexto}\n\n✅ Todos os produtos conferidos e expedidos com sucesso!`;
+        
+        setTimeout(() => {
+            if (confirm(`📱 Deseja enviar notificação no WhatsApp para o gestor?`)) {
+                sendWhatsApp(mensagem);
+            }
+        }, 1500);
+    }
+    
+    return result;
+};
+
+document.addEventListener('DOMContentLoaded', setupWhatsAppConfig);
+
+// -------------------------------------------------------
+// 9.15. CHECKLIST COM FOTO (Ideia 3.5)
+// -------------------------------------------------------
+let fotoEnabled = false;
+
+function setupFotoConfig() {
+    const configFoto = document.getElementById('config-foto');
+    if (configFoto) {
+        const saved = localStorage.getItem('expedicao_foto');
+        fotoEnabled = saved === '1';
+        configFoto.checked = fotoEnabled;
+        
+        configFoto.addEventListener('change', () => {
+            fotoEnabled = configFoto.checked;
+            localStorage.setItem('expedicao_foto', fotoEnabled ? '1' : '0');
+        });
+    }
+}
+
+async function takeFoto(item) {
+    if (!fotoEnabled) return null;
+    
+    return new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.capture = 'environment';
+        
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) { resolve(null); return; }
+            
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const base64 = ev.target.result;
+                
+                // Salva a foto no log do item
+                if (item && item.id) {
+                    try {
+                        const fotos = JSON.parse(localStorage.getItem('expedicao_fotos') || '{}');
+                        fotos[item.id] = {
+                            data: base64,
+                            timestamp: new Date().toISOString(),
+                            sku: item.sku,
+                            descricao: item.descricao
+                        };
+                        localStorage.setItem('expedicao_fotos', JSON.stringify(fotos));
+                    } catch (e) {
+                        console.warn('Erro ao salvar foto:', e);
+                    }
+                }
+                
+                resolve(base64);
+            };
+            reader.readAsDataURL(file);
+        };
+        
+        input.click();
+    });
+}
+
+function showFoto(itemId) {
+    try {
+        const fotos = JSON.parse(localStorage.getItem('expedicao_fotos') || '{}');
+        const foto = fotos[itemId];
+        if (!foto) {
+            showToast('Sem Foto', 'Este item não possui foto registrada.', 'info');
+            return;
+        }
+        
+        // Abre modal com a foto
+        const modal = document.getElementById('foto-modal') || createFotoModal();
+        const img = modal.querySelector('img');
+        if (img) {
+            img.src = foto.data;
+        }
+        modal.style.display = 'flex';
+    } catch (e) {
+        console.warn('Erro ao carregar foto:', e);
+    }
+}
+
+function createFotoModal() {
+    const modal = document.createElement('div');
+    modal.id = 'foto-modal';
+    modal.innerHTML = `
+        <img src="" alt="Foto do item">
+        <button class="foto-close" onclick="document.getElementById('foto-modal').style.display='none'">✕</button>
+    `;
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+    });
+    document.body.appendChild(modal);
+    return modal;
+}
+
+// Integra foto no manualAddUnit e processBarcodeRead
+const originalManualFoto = window.manualAddUnit;
+window.manualAddUnit = async function(id) {
+    const item = state.items.find(i => i.id === id);
+    if (item && !item.expedido) {
+        // Se for o último item, pergunta se quer tirar foto
+        const willComplete = item.quantidade <= 1;
+        if (willComplete && fotoEnabled) {
+            await takeFoto(item);
+        }
+    }
+    return originalManualFoto.call(this, id);
+};
+
+// Adiciona ícone de foto nos logs se houver foto
+const originalRenderLogs = renderLogs;
+renderLogs = function() {
+    originalRenderLogs.call(this);
+    
+    if (!fotoEnabled || !elements.logsTableBody) return;
+    
+    try {
+        const fotos = JSON.parse(localStorage.getItem('expedicao_fotos') || '{}');
+        const rows = elements.logsTableBody.querySelectorAll('tr');
+        
+        rows.forEach(row => {
+            const eanCell = row.cells[3];
+            if (!eanCell) return;
+            const eanText = eanCell.textContent.trim();
+            
+            // Procura nos logs se há foto para este EAN/SKU
+            for (const [itemId, foto] of Object.entries(fotos)) {
+                if (foto.sku === eanText || foto.descricao === eanText) {
+                    const actionCell = row.cells[2];
+                    if (actionCell) {
+                        const fotoBtn = document.createElement('span');
+                        fotoBtn.textContent = ' 📷';
+                        fotoBtn.style.cssText = 'cursor:pointer; font-size:14px;';
+                        fotoBtn.title = 'Ver foto do item';
+                        fotoBtn.onclick = () => showFoto(parseInt(itemId));
+                        actionCell.appendChild(fotoBtn);
+                    }
+                    break;
+                }
+            }
+        });
+    } catch (e) {
+        console.warn('Erro ao verificar fotos nos logs:', e);
+    }
+};
+
+document.addEventListener('DOMContentLoaded', setupFotoConfig);
+
+// -------------------------------------------------------
+// 9.16. PWA - SERVICE WORKER (Ideia 3.1)
+// -------------------------------------------------------
+function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        // Cria o manifest.json dinamicamente
+        const manifest = {
+            name: 'Expedição Inteligente',
+            short_name: 'Expedição',
+            description: 'Sistema de expedição e conferência de vendas',
+            start_url: './index.html',
+            display: 'standalone',
+            background_color: '#0a0b10',
+            theme_color: '#6366f1',
+            icons: [
+                { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml' }
+            ]
+        };
+        
+        // Injeta o manifest no head
+        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        const manifestURL = URL.createObjectURL(manifestBlob);
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = manifestURL;
+        document.head.appendChild(link);
+        
+        // Registra o service worker
+        const swCode = `
+        const CACHE_NAME = 'expedicao-v1';
+        const URLS_TO_CACHE = [
+            './',
+            './index.html',
+            './index.css',
+            './app.js',
+            './pdf-parser.js',
+            './favicon.svg',
+            './teste.pdf'
+        ];
+        
+        self.addEventListener('install', (event) => {
+            event.waitUntil(
+                caches.open(CACHE_NAME).then((cache) => {
+                    return cache.addAll(URLS_TO_CACHE);
+                })
+            );
+        });
+        
+        self.addEventListener('fetch', (event) => {
+            event.respondWith(
+                caches.match(event.request).then((response) => {
+                    if (response) return response;
+                    return fetch(event.request).catch(() => {
+                        return caches.match('./index.html');
+                    });
+                })
+            );
+        });
+        
+        self.addEventListener('activate', (event) => {
+            event.waitUntil(
+                caches.keys().then((names) => {
+                    return Promise.all(
+                        names.filter(name => name !== CACHE_NAME)
+                            .map(name => caches.delete(name))
+                    );
+                })
+            );
+        });
+        `;
+        
+        const swBlob = new Blob([swCode], { type: 'application/javascript' });
+        const swURL = URL.createObjectURL(swBlob);
+        
+        navigator.serviceWorker.register(swURL, { scope: './' }).then(() => {
+            console.log('✅ PWA: Service Worker registrado!');
+        }).catch(err => {
+            console.warn('❌ PWA: Erro ao registrar Service Worker:', err);
+        });
+    }
+}
+
+// -------------------------------------------------------
+// 9.17. RELATÓRIO DE PRODUTIVIDADE (Ideia 3.2)
+// -------------------------------------------------------
+function generateProductivityReport() {
+    if (state.logs.length === 0) {
+        showToast('Sem dados', 'Não há logs para gerar relatório.', 'error');
+        return;
+    }
+    
+    const now = new Date();
+    const hoje = now.toLocaleDateString('pt-BR');
+    
+    // Calcula métricas
+    const logsHoje = state.logs.filter(log => {
+        const logDate = new Date(log.timestamp).toLocaleDateString('pt-BR');
+        return logDate === hoje;
+    });
+    
+    const totalOK = logsHoje.filter(l => l.tipo === 'success').length;
+    const totalErro = logsHoje.filter(l => l.tipo === 'error').length;
+    const totalManual = logsHoje.filter(l => l.tipo === 'manual').length;
+    const totalGeral = logsHoje.length;
+    
+    const taxaAcerto = totalGeral > 0 ? Math.round((totalOK / totalGeral) * 100) : 0;
+    
+    // Calcula itens/hora
+    const timestamps = logsHoje.map(l => new Date(l.timestamp).getTime()).sort();
+    let itensPorHora = 0;
+    if (timestamps.length >= 2) {
+        const diffHoras = (timestamps[timestamps.length - 1] - timestamps[0]) / 3600000;
+        if (diffHoras > 0) {
+            itensPorHora = Math.round(totalGeral / diffHoras);
+        }
+    }
+    
+    // Top 5 SKUs
+    const skuCount = {};
+    logsHoje.forEach(l => {
+        if (l.acao === 'Conferência Bip' || l.acao === 'Conferência Manual') {
+            const key = `${l.ean}`;
+            skuCount[key] = (skuCount[key] || 0) + l.quantidade;
+        }
+    });
+    const topSKUs = Object.entries(skuCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+    
+    // Calcula tempo médio por lista
+    const listas = {};
+    state.logs.forEach(l => {
+        const key = new Date(l.timestamp).toLocaleDateString('pt-BR');
+        if (!listas[key]) listas[key] = [];
+        listas[key].push(new Date(l.timestamp).getTime());
+    });
+    let tempoMedio = 0;
+    let listaCount = 0;
+    for (const [, times] of Object.entries(listas)) {
+        if (times.length >= 2) {
+            const min = Math.min(...times);
+            const max = Math.max(...times);
+            tempoMedio += (max - min);
+            listaCount++;
+        }
+    }
+    if (listaCount > 0) {
+        tempoMedio = Math.round(tempoMedio / listaCount / 60000);
+    }
+    
+    // Monta relatório
+    let csv = '\uFEFF';
+    csv += `"📊 RELATÓRIO DE PRODUTIVIDADE - ${hoje}";;;;\r\n`;
+    csv += `"Despachante: ${state.activeDespachanteNome || 'Geral'}";;;;\r\n`;
+    csv += `;;;;;;;;\r\n`;
+    csv += `"📈 INDICADORES";;;;\r\n`;
+    csv += `"Total de operações hoje",${totalGeral};;;\r\n`;
+    csv += `"✅ Conferências OK",${totalOK};;;\r\n`;
+    csv += `"❌ Erros",${totalErro};;;\r\n`;
+    csv += `"👤 Manuais",${totalManual};;;\r\n`;
+    csv += `"🎯 Taxa de Acerto",${taxaAcerto}%;;;\r\n`;
+    csv += `"⚡ Itens por hora",${itensPorHora};;;\r\n`;
+    csv += `"⏱️ Tempo médio por lista",${tempoMedio}min;;;\r\n`;
+    csv += `;;;;;;;;\r\n`;
+    
+    if (topSKUs.length > 0) {
+        csv += `"🏆 TOP 5 PRODUTOS";;;;\r\n`;
+        csv += `"SKU / EAN";"Qtd";;\r\n`;
+        topSKUs.forEach(([sku, qtd], idx) => {
+            csv += `"${idx + 1}. ${sku}";${qtd};;\r\n`;
+        });
+        csv += `;;;;;;;;\r\n`;
+    }
+    
+    csv += `"📋 ÚLTIMOS EVENTOS";;;;\r\n`;
+    csv += `"Data";"Hora";"Ação";"EAN/SKU";"Qtd";"Status"\r\n`;
+    
+    state.logs.slice(0, 30).forEach(log => {
+        const d = new Date(log.timestamp);
+        const line = [
+            d.toLocaleDateString('pt-BR'),
+            d.toLocaleTimeString('pt-BR'),
+            log.acao,
+            `="${log.ean}"`,
+            log.quantidade > 0 ? `+${log.quantidade}` : log.quantidade,
+            log.tipo === 'success' ? '✅' : log.tipo === 'error' ? '❌' : 'ℹ️'
+        ].map(v => `"${v.toString().replace(/"/g, '""')}"`).join(';');
+        csv += line + '\r\n';
+    });
+    
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `produtividade_${now.toISOString().slice(0,10)}.csv`;
+    link.click();
+    
+    showToast('Relatório Gerado', 'Relatório de produtividade baixado com sucesso!', 'success');
+}
+
+// Adiciona botão de relatório na administração
+document.addEventListener('DOMContentLoaded', () => {
+    const logsCardHeader = document.querySelector('.logs-card-header .logs-btn-group');
+    if (logsCardHeader) {
+        const btnRelatorio = document.createElement('button');
+        btnRelatorio.className = 'logs-btn';
+        btnRelatorio.innerHTML = '📊 Produtividade';
+        btnRelatorio.addEventListener('click', generateProductivityReport);
+        logsCardHeader.appendChild(btnRelatorio);
+    }
+});
+
+// -------------------------------------------------------
+// 9.18. INICIALIZAÇÃO DA FASE 3
+// -------------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+    // PWA
+    registerServiceWorker();
+    
+    // Injeta flash nas funções de feedback
+    const origSuccess = showToast;
+    showToast = function(title, desc, type = 'success') {
+        // Flash verde/vermelho
+        if (flashEnabled) {
+            if (type === 'success') showReaderFlash('success');
+            else if (type === 'error') showReaderFlash('error');
+        }
+        return origSuccess.call(this, title, desc, type);
+    };
+});
+
 // Pausa a sincronização quando a janela do navegador perde o foco (economiza CPU/Servidor)
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {

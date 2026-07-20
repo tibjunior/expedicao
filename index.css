@@ -2188,7 +2188,144 @@ body.turbo-mode *::after {
 }
 
 /* ==========================================
-    8.20. REGRAS DE RESPONSIVIDADE MOBILE
+    8.20. CONFIG TOGGLES (PAINEL ADMIN)
+    ========================================== */
+.config-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.config-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 10px;
+    transition: background 0.2s;
+    user-select: none;
+}
+
+.config-toggle:hover {
+    background: rgba(255,255,255,0.03);
+}
+
+.config-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.config-toggle .toggle-slider {
+    width: 44px;
+    height: 24px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    position: relative;
+    transition: all 0.3s;
+    flex-shrink: 0;
+}
+
+.config-toggle .toggle-slider::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    transition: all 0.3s;
+}
+
+.config-toggle input[type="checkbox"]:checked + .toggle-slider {
+    background: var(--primary);
+    border-color: var(--primary);
+    box-shadow: 0 0 8px var(--primary-glow);
+}
+
+.config-toggle input[type="checkbox"]:checked + .toggle-slider::after {
+    left: 22px;
+    background: #fff;
+}
+
+.config-toggle .toggle-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* ==========================================
+    8.21. FLASH VERDE/VERMELHO (LEITURA)
+    ========================================== */
+.reader-flash {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 99998;
+    pointer-events: none;
+    animation: flash-fade 0.4s ease-out forwards;
+}
+
+.reader-flash.success {
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, rgba(16, 185, 129, 0) 70%);
+}
+
+.reader-flash.error {
+    background: radial-gradient(circle, rgba(239, 68, 68, 0.3) 0%, rgba(239, 68, 68, 0) 70%);
+}
+
+@keyframes flash-fade {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* ==========================================
+    8.22. MODAL DE FOTO (CHECKLIST)
+    ========================================== */
+#foto-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.95);
+    z-index: 100001;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    cursor: pointer;
+}
+
+#foto-modal img {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+}
+
+#foto-modal .foto-close {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ==========================================
+    8.23. REGRAS DE RESPONSIVIDADE MOBILE
     ========================================== */
 @media (max-width: 992px) {
     .dashboard-layout, .admin-layout {
