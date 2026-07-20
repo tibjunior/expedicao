@@ -1,4 +1,42 @@
-<Files "expedicao.db">
+# Protege o banco SQLite (pode estar na raiz ou um nível acima)
+<FilesMatch "expedicao\.db$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Protege o arquivo de credenciais
+<Files "credencial.txt">
     Order allow,deny
     Deny from all
 </Files>
+
+# Negar listagem de diretórios
+Options -Indexes
+
+# Bloquear acesso a arquivos de ambiente
+<FilesMatch "\.(env|md|lock|txt)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Redirecionar HTTP para HTTPS (opcional)
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+</IfModule>
+
+# Compressão Gzip
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Cache de arquivos estáticos
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType image/x-icon "access plus 1 month"
+</IfModule>

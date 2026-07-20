@@ -65,11 +65,15 @@ class ExpedicaoDB {
     async apiPost(action, data) {
         const response = await fetch(`api.php?action=${action}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer expedicao_api_token_2026_seguro_aqui'
+            },
             body: JSON.stringify(data)
         });
         if (!response.ok) {
-            throw new Error(`Erro na API (${action}): ${response.statusText}`);
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.message || `Erro na API (${action}): ${response.statusText}`);
         }
         return await response.json();
     }
