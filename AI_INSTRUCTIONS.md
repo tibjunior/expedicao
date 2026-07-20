@@ -320,4 +320,64 @@ git push origin main
 
 ---
 
-*Documento gerado em 20/07/2026 · Mantenha atualizado com cada nova funcionalidade*
+## 9. Roadmap por Fases (Ordem de Prioridade)
+
+### 🔴 FASE 1 — SEGURANÇA (Urgente — fazer antes de qualquer outra coisa)
+| # | Tarefa | Arquivo | Esforço | Status |
+|:-:|--------|---------|:-------:|:------:|
+| 1.1 | Sanitizar todos os inputs na api.php (anti SQL Injection) | `api.php` | 🟢 Fácil | ⬜ |
+| 1.2 | Mover banco SQLite para fora da pasta pública (`../`) | `api.php:12` + `.htaccess` | 🟢 Fácil | ⬜ |
+| 1.3 | Restringir CORS para domínios específicos | `api.php:2` | 🟢 Fácil | ⬜ |
+| 1.4 | Adicionar autenticação por token na API | `api.php` + `app.js` | 🟡 Médio | ⬜ |
+| 1.5 | Mover credenciais FTP para variável de ambiente | `deploy.js` + `.env` | 🟢 Fácil | ⬜ |
+
+### 🟡 FASE 2 — PERFORMANCE (Melhorar fluidez do sistema)
+| # | Tarefa | Arquivo | Esforço | Status |
+|:-:|--------|---------|:-------:|:------:|
+| 2.1 | Adicionar debounce de 200ms na busca | `app.js:784` | 🟢 Fácil | ⬜ |
+| 2.2 | Paginar a tabela (50 itens por página com "Carregar mais") | `app.js:1373` | 🟡 Médio | ⬜ |
+| 2.3 | Cachear vozes TTS na inicialização | `app.js:9.9` | 🟢 Fácil | ⬜ |
+| 2.4 | Minificar CSS/JS no build automático | `deploy.js` | 🟡 Médio | ⬜ |
+
+### 🟢 FASE 3 — NOVAS FUNCIONALIDADES (Entregas de valor)
+| # | Tarefa | Esforço | Status |
+|:-:|--------|:-------:|:------:|
+| 3.1 | **PWA — Service Worker + manifest.json** (instalável como app) | 🟡 Médio | ⬜ |
+| 3.2 | **Relatório de Produtividade** (itens/hora por operador, meta vs realizado) | 🔴 Difícil | ⬜ |
+| 3.3 | **Flash verde na tela ao ler código** (feedback visual) | 🟢 Fácil | ⬜ |
+| 3.4 | **Notificação por WhatsApp** (link `wa.me` ao finalizar lista) | 🟡 Médio | ⬜ |
+| 3.5 | **Checklist com Foto** (foto do produto vinculada ao log) | 🟡 Médio | ⬜ |
+| 3.6 | **Modo compacto para tablets** (layout otimizado para carrinhos) | 🟡 Médio | ⬜ |
+
+### 🔵 FASE 4 — AUTOMAÇÃO E INTEGRAÇÕES (Escalabilidade)
+| # | Tarefa | Esforço | Status |
+|:-:|--------|:-------:|:------:|
+| 4.1 | **Roteirização de Entregas** (manifesto por CEP/rota) | 🔴 Difícil | ⬜ |
+| 4.2 | **Integração com Marketplaces** (API Shopee, ML, Amazon) | 🔴 Difícil | ⬜ |
+| 4.3 | **Controle de Lotes e Validade** (alertas de vencimento) | 🟡 Médio | ⬜ |
+| 4.4 | **Impressão de Etiquetas** (código de barras para itens sem EAN) | 🟡 Médio | ⬜ |
+
+### 🟣 FASE 5 — NEGÓCIO (Expansão do produto)
+| # | Tarefa | Esforço | Status |
+|:-:|--------|:-------:|:------:|
+| 5.1 | **Multi-empresa (SaaS)** — tenant isolation com `empresa_id` | 🔴 Difícil | ⬜ |
+| 5.2 | **Módulo de Estoque** — controle de saída com alerta de saldo baixo | 🔴 Difícil | ⬜ |
+| 5.3 | **Dashboard Gerencial** — gráficos de desempenho em tempo real | 🔴 Difícil | ⬜ |
+
+---
+
+### 📊 Resumo do Roadmap
+
+| Fase | Foco | Itens | Esforço Total | Prioridade |
+|:----:|------|:----:|:-------------:|:----------:|
+| 🔴 1 | Segurança | 5 | 🟢 Fácil | **MÁXIMA** |
+| 🟡 2 | Performance | 4 | 🟡 Médio | Alta |
+| 🟢 3 | Novas Features | 6 | 🟡🔴 Misto | Média |
+| 🔵 4 | Automação | 4 | 🔴 Difícil | Baixa |
+| 🟣 5 | Negócio | 3 | 🔴 Difícil | Futuro |
+
+> **Nota:** As fases são **cumulativas** — não pule para a Fase 3 sem antes concluir a Fase 1. Segurança primeiro, sempre.
+
+---
+
+*Documento gerado em 20/07/2026 · Última atualização: 20/07/2026 · Mantenha atualizado com cada nova funcionalidade*
