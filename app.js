@@ -784,9 +784,13 @@ function initEventListeners() {
         });
     });
 
-    // Busca de texto em tempo real
+    // Busca de texto em tempo real (com debounce de 200ms - Fase 2.1)
+    let searchDebounceTimeout = null;
     elements.searchInput.addEventListener('input', () => {
-        renderTable();
+        if (searchDebounceTimeout) clearTimeout(searchDebounceTimeout);
+        searchDebounceTimeout = setTimeout(() => {
+            renderTable();
+        }, 200);
     });
 
     // Câmera Scanner
@@ -2059,50 +2063,97 @@ async function clearLogs() {
     }
 }
 
-// Exporta logs no formato CSV compatível com Excel em português
+// Exporta logs no formato CSV profissional com Excel
 function exportLogsToCsv() {
     if (state.logs.length === 0) {
         showToast('Erro ao exportar', 'Não há registros no histórico para exportar.', 'error');
         return;
     }
     
-    // Cabeçalho do CSV
-    let csvContent = '\uFEFF'; // Adiciona BOM para abrir corretamente acentuações no Excel (UTF-8)
-    csvContent += 'Data/Hora;Nota Fiscal;Ação;EAN/SKU;Qtd;Tipo\r\n';
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('pt-BR');
+    const timeStr = now.toLocaleTimeString('pt-BR');
+    const despachanteNome = state.activeDespachanteNome || 'Geral';
+    
+    // Cabeçalho profissional do CSV
+    let csvContent = '\uFEFF'; // BOM para UTF-8 no Excel
+    
+    // Linha de título do relatório
+    csvContent += `"RELATÓRIO DE AUDITORIA - EXPEDIÇÃO";;;;\r\n`;
+    csvContent += `"Despachante: ${despachanteNome}";;;;\r\n`;
+    csvContent += `"Gerado em: ${dateStr} às ${timeStr}";;;;\r\n`;
+    csvContent += `"Total de registros: ${state.logs.length}";;;;\r\n`;
+    csvContent += `;;;;;;;;\r\n`; // Linha em branco
+    
+    // Cabeçalho da tabela com formatação
+    csvContent += `"Data";"Hora";"Nota Fiscal";"Ação";"EAN / SKU";"Qtd";"Tipo";"Status"\r\n`;
+    csvContent += `;;;;;;;;\r\n`; // Separador
+    
+    // Totais para o resumo
+    let totalOK = 0, totalFalha = 0, totalManual = 0, totalInfo = 0;
     
     state.logs.forEach(log => {
         const dateObj = new Date(log.timestamp);
-        const dateStr = `${dateObj.toLocaleDateString('pt-BR')} ${dateObj.toLocaleTimeString('pt-BR')}`;
+        const logDate = dateObj.toLocaleDateString('pt-BR');
+        const logTime = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        
+        // Contagem por tipo
+        if (log.tipo === 'success') totalOK++;
+        else if (log.tipo === 'error') totalFalha++;
+        else if (log.tipo === 'manual') totalManual++;
+        else totalInfo++;
+        
+        // Status descritivo
+        let status = '✅ OK';
+        if (log.tipo === 'error') status = '❌ Falha';
+        else if (log.tipo === 'info') status = 'ℹ️ Info';
+        else if (log.tipo === 'manual') status = '👤 Manual';
+        
+        // Formata quantidade com sinal
+        const qtdFormatada = log.quantidade > 0 ? `+${log.quantidade}` : log.quantidade.toString();
         
         const line = [
-            dateStr,
+            logDate,
+            logTime,
             log.nota,
             log.acao,
-            `="${log.ean}"`, // Evita que o Excel converta números longos de EAN em notação científica (ex: 7,89E+12)
-            log.quantidade,
-            log.tipo
+            `="${log.ean}"`, // Evita notação científica no Excel
+            qtdFormatada,
+            log.tipo,
+            status
         ].map(val => `"${val.toString().replace(/"/g, '""')}"`).join(';');
         
         csvContent += line + '\r\n';
     });
+    
+    // Resumo estatístico no final
+    csvContent += `;;;;;;;;\r\n`;
+    csvContent += `;;;;;;;;\r\n`;
+    csvContent += `"📊 RESUMO ESTATÍSTICO";;;;\r\n`;
+    csvContent += `"Total de eventos: ${state.logs.length}";;;;\r\n`;
+    csvContent += `"✅ Conferências OK: ${totalOK}";;;;\r\n`;
+    csvContent += `"❌ Falhas/Erros: ${totalFalha}";;;;\r\n`;
+    csvContent += `"👤 Intervenções Manuais: ${totalManual}";;;;\r\n`;
+    csvContent += `"ℹ️ Informações: ${totalInfo}";;;;\r\n`;
+    csvContent += `;;;;;;;;\r\n`;
+    csvContent += `"--- FIM DO RELATÓRIO ---";;;;\r\n`;
     
     // Cria elemento de download e dispara
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0,10);
+    const fileName = `auditoria_${despachanteNome.replace(/\s+/g, '_')}_${now.toISOString().slice(0,10)}.csv`;
     
     link.setAttribute('href', url);
-    link.setAttribute('download', `auditoria_expedicao_${dateStr}.csv`);
+    link.setAttribute('download', fileName);
     link.style.visibility = 'hidden';
     
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     
-    showToast('Logs Exportados', 'Relatório CSV de auditoria baixado com sucesso!', 'success');
+    showToast('Logs Exportados', `Relatório CSV com ${state.logs.length} registros baixado!`, 'success');
     playSoundEffect('confirm');
 }
 
