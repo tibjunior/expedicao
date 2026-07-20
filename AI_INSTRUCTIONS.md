@@ -334,7 +334,7 @@ git push origin main
 ### 🟡 FASE 2 — PERFORMANCE (Melhorar fluidez do sistema)
 | # | Tarefa | Arquivo | Esforço | Status |
 |:-:|--------|---------|:-------:|:------:|
-| 2.1 | Adicionar debounce de 200ms na busca | `app.js:784` | 🟢 Fácil | ⬜ |
+| 2.1 | Adicionar debounce de 200ms na busca | `app.js:784` | 🟢 Fácil | ✅ |
 | 2.2 | Paginar a tabela (50 itens por página com "Carregar mais") | `app.js:1373` | 🟡 Médio | ⬜ |
 | 2.3 | Cachear vozes TTS na inicialização | `app.js:9.9` | 🟢 Fácil | ⬜ |
 | 2.4 | Minificar CSS/JS no build automático | `deploy.js` | 🟡 Médio | ⬜ |
