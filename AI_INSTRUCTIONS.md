@@ -325,10 +325,10 @@ git push origin main
 ### 🔴 FASE 1 — SEGURANÇA (Urgente — fazer antes de qualquer outra coisa)
 | # | Tarefa | Arquivo | Esforço | Status |
 |:-:|--------|---------|:-------:|:------:|
-| 1.1 | Sanitizar todos os inputs na api.php (anti SQL Injection) | `api.php` | 🟢 Fácil | ⬜ |
-| 1.2 | Mover banco SQLite para fora da pasta pública (`../`) | `api.php:12` + `.htaccess` | 🟢 Fácil | ⬜ |
-| 1.3 | Restringir CORS para domínios específicos | `api.php:2` | 🟢 Fácil | ⬜ |
-| 1.4 | Adicionar autenticação por token na API | `api.php` + `app.js` | 🟡 Médio | ⬜ |
+| 1.1 | Sanitizar todos os inputs na api.php (anti SQL Injection) | `api.php` | 🟢 Fácil | ✅ |
+| 1.2 | Mover banco SQLite para fora da pasta pública (`../`) | `api.php:12` + `.htaccess` | 🟢 Fácil | ✅ |
+| 1.3 | Restringir CORS para domínios específicos | `api.php:2` | 🟢 Fácil | ✅ |
+| 1.4 | Adicionar autenticação por token na API | `api.php` + `app.js` | 🟡 Médio | ✅ |
 | 1.5 | Mover credenciais FTP para variável de ambiente | `deploy.js` + `.env` | 🟢 Fácil | ⬜ |
 
 ### 🟡 FASE 2 — PERFORMANCE (Melhorar fluidez do sistema)
