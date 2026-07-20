@@ -133,6 +133,7 @@ O sistema pode operar em **3 modos**:
 | 28 | **Modo Turbo** ⚡ | `app.js:9.10` | Botão ⚡ no header — desativa animações |
 | 29 | **Romaneio** 🖨️ | `app.js:9.11` | Botão 🖨️ no progresso — impressão térmica 80mm |
 | 30 | **Backup Automático** 💾 | `app.js:9.12` | Snapshots a cada 5min + botão restaurar na admin |
+| 31 | **Menu Popup de Configurações** ⚙️ | `app.js:9.19` | Botão ⚙️ no header — popup com toggles |
 
 ---
 
@@ -328,13 +329,13 @@ git push origin main
 | 1.1 | Sanitizar todos os inputs na api.php (anti SQL Injection) | `api.php` | 🟢 Fácil | ✅ |
 | 1.2 | Mover banco SQLite para fora da pasta pública (`../`) | `api.php:12` + `.htaccess` | 🟢 Fácil | ✅ |
 | 1.3 | Restringir CORS para domínios específicos | `api.php:2` | 🟢 Fácil | ✅ |
-| 1.4 | Adicionar autenticação por token na API | `api.php` + `app.js` | 🟡 Médio | ✅ |
+| 1.4 | Adicionar autenticação por token na API | `app.js` + `api.php` | 🟡 Médio | ✅ |
 | 1.5 | Mover credenciais FTP para variável de ambiente | `deploy.js` + `.env` | 🟢 Fácil | ⬜ |
 
 ### 🟡 FASE 2 — PERFORMANCE (Melhorar fluidez do sistema)
 | # | Tarefa | Arquivo | Esforço | Status |
 |:-:|--------|---------|:-------:|:------:|
-| 2.1 | Adicionar debounce de 200ms na busca | `app.js:784` | 🟢 Fácil | ✅ |
+| 2.1 | Adicionar debounce de 200ms na busca | `app.js:1386` | 🟢 Fácil | ✅ |
 | 2.2 | Paginar a tabela (50 itens por página com "Carregar mais") | `app.js:1373` | 🟡 Médio | ⬜ |
 | 2.3 | Cachear vozes TTS na inicialização | `app.js:9.9` | 🟢 Fácil | ⬜ |
 | 2.4 | Minificar CSS/JS no build automático | `deploy.js` | 🟡 Médio | ⬜ |
@@ -347,7 +348,7 @@ git push origin main
 | 3.3 | **Flash verde na tela ao ler código** (feedback visual) | 🟢 Fácil | ✅ |
 | 3.4 | **Notificação por WhatsApp** (link `wa.me` ao finalizar lista) | 🟡 Médio | ✅ |
 | 3.5 | **Checklist com Foto** (foto do produto vinculada ao log) | 🟡 Médio | ✅ |
-| 3.6 | **Painel de Configurações** (toggles para WhatsApp, Foto, Flash) | 🟡 Médio | ✅ |
+| 3.6 | **Menu Popup de Configurações** ⚙️ (botão no header com toggles) | 🟡 Médio | ✅ |
 
 ### 🔵 FASE 4 — AUTOMAÇÃO E INTEGRAÇÕES (Escalabilidade)
 | # | Tarefa | Esforço | Status |
@@ -380,4 +381,4 @@ git push origin main
 
 ---
 
-*Documento gerado em 20/07/2026 · Última atualização: 20/07/2026 · Mantenha atualizado com cada nova funcionalidade*
+*Documento gerado em 20/07/2026 · Última atualização: 20/07/2026 17:00 · Mantenha atualizado com cada nova funcionalidade*

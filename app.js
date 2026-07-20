@@ -1,4 +1,4 @@
-/**
+ /**
  * Lógica principal da aplicação de expedição.
  * Controla o estado, interface, LocalStorage, scanner e áudio.
  */
@@ -4040,14 +4040,14 @@ checkAllCompleted = async function() {
 
 // Configuração do flash
 function setupFlashConfig() {
-    const configFlash = document.getElementById('config-flash');
-    if (configFlash) {
+    const popupFlash = document.getElementById('popup-config-flash');
+    if (popupFlash) {
         const saved = localStorage.getItem('expedicao_flash');
         flashEnabled = saved !== 'false';
-        configFlash.checked = flashEnabled;
+        popupFlash.checked = flashEnabled;
         
-        configFlash.addEventListener('change', () => {
-            flashEnabled = configFlash.checked;
+        popupFlash.addEventListener('change', () => {
+            flashEnabled = popupFlash.checked;
             localStorage.setItem('expedicao_flash', flashEnabled ? '1' : '0');
         });
     }
@@ -4070,34 +4070,34 @@ function sendWhatsApp(message) {
 }
 
 function setupWhatsAppConfig() {
-    const configWA = document.getElementById('config-whatsapp');
-    const configNumber = document.getElementById('config-whatsapp-number');
-    const numberInput = document.getElementById('whatsapp-number-input');
+    const popupWA = document.getElementById('popup-config-whatsapp');
+    const popupWANumber = document.getElementById('popup-config-whatsapp-number');
+    const popupNumberInput = document.getElementById('popup-whatsapp-number-input');
     
-    if (configWA && numberInput) {
+    if (popupWA && popupNumberInput) {
         // Carrega configurações salvas
         const saved = localStorage.getItem('expedicao_whatsapp');
         whatsappEnabled = saved === '1';
-        configWA.checked = whatsappEnabled;
+        popupWA.checked = whatsappEnabled;
         
         const savedNumber = localStorage.getItem('expedicao_whatsapp_number') || '';
         whatsappNumber = savedNumber;
-        numberInput.value = savedNumber;
+        popupNumberInput.value = savedNumber;
         
-        if (configNumber) {
-            configNumber.style.display = whatsappEnabled ? 'block' : 'none';
+        if (popupWANumber) {
+            popupWANumber.style.display = whatsappEnabled ? 'block' : 'none';
         }
         
-        configWA.addEventListener('change', () => {
-            whatsappEnabled = configWA.checked;
+        popupWA.addEventListener('change', () => {
+            whatsappEnabled = popupWA.checked;
             localStorage.setItem('expedicao_whatsapp', whatsappEnabled ? '1' : '0');
-            if (configNumber) {
-                configNumber.style.display = whatsappEnabled ? 'block' : 'none';
+            if (popupWANumber) {
+                popupWANumber.style.display = whatsappEnabled ? 'block' : 'none';
             }
         });
         
-        numberInput.addEventListener('input', () => {
-            whatsappNumber = numberInput.value.replace(/\D/g, '');
+        popupNumberInput.addEventListener('input', () => {
+            whatsappNumber = popupNumberInput.value.replace(/\D/g, '');
             localStorage.setItem('expedicao_whatsapp_number', whatsappNumber);
         });
     }
@@ -4152,14 +4152,14 @@ document.addEventListener('DOMContentLoaded', setupWhatsAppConfig);
 let fotoEnabled = false;
 
 function setupFotoConfig() {
-    const configFoto = document.getElementById('config-foto');
-    if (configFoto) {
+    const popupFoto = document.getElementById('popup-config-foto');
+    if (popupFoto) {
         const saved = localStorage.getItem('expedicao_foto');
         fotoEnabled = saved === '1';
-        configFoto.checked = fotoEnabled;
+        popupFoto.checked = fotoEnabled;
         
-        configFoto.addEventListener('change', () => {
-            fotoEnabled = configFoto.checked;
+        popupFoto.addEventListener('change', () => {
+            fotoEnabled = popupFoto.checked;
             localStorage.setItem('expedicao_foto', fotoEnabled ? '1' : '0');
         });
     }
@@ -4509,22 +4509,115 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // -------------------------------------------------------
+// 9.19. MENU POPUP DE CONFIGURAÇÕES (HEADER)
+// -------------------------------------------------------
+function initSettingsPopup() {
+    const btnOpen = document.getElementById('btn-open-settings');
+    const btnClose = document.getElementById('btn-close-settings');
+    const popup = document.getElementById('settings-popup');
+    
+    if (!btnOpen || !popup) return;
+    
+    const openPopup = () => {
+        popup.style.display = 'flex';
+        syncSettingsPopup();
+    };
+    
+    const closePopup = () => {
+        popup.style.display = 'none';
+    };
+    
+    btnOpen.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openPopup();
+    });
+    
+    if (btnClose) {
+        btnClose.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closePopup();
+        });
+    }
+    
+    document.addEventListener('click', (e) => {
+        if (!popup.contains(e.target) && e.target !== btnOpen) {
+            closePopup();
+        }
+    });
+    
+    popup.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+}
+
+function applySettingsFromPopup() {
+    // As configurações agora são gerenciadas diretamente pelo popup,
+    // então não precisamos mais sincronizar com elementos antigos.
+    // Apenas garantimos que ops listeners de change/input dos setups
+    // foram disparados para salvar no localStorage.
+    
+    const popupWA = document.getElementById('popup-config-whatsapp');
+    const popupWANumber = document.getElementById('popup-config-whatsapp-number');
+    const popupNumberInput = document.getElementById('popup-whatsapp-number-input');
+    
+    if (popupWA && popupNumberInput) {
+        // Dispara eventos para atualizar variáveis globais e localStorage
+        popupWA.dispatchEvent(new Event('change'));
+        popupNumberInput.dispatchEvent(new Event('input'));
+        if (popupWANumber) {
+            popupWANumber.style.display = popupWA.checked ? 'block' : 'none';
+        }
+    }
+    
+    const popupFoto = document.getElementById('popup-config-foto');
+    if (popupFoto) {
+        popupFoto.dispatchEvent(new Event('change'));
+    }
+    
+    const popupFlash = document.getElementById('popup-config-flash');
+    if (popupFlash) {
+        popupFlash.dispatchEvent(new Event('change'));
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Eventos dos inputs do popup
+    const popupConfigs = ['popup-config-whatsapp', 'popup-config-foto', 'popup-config-flash'];
+    popupConfigs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', () => {
+                applySettingsFromPopup();
+            });
+        }
+    });
+    
+    const popupNumberInput = document.getElementById('popup-whatsapp-number-input');
+    if (popupNumberInput) {
+        popupNumberInput.addEventListener('input', () => {
+            applySettingsFromPopup();
+        });
+    }
+});
+
+// -------------------------------------------------------
 // 9.18. INICIALIZAÇÃO DA FASE 3
 // -------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
     // PWA
     registerServiceWorker();
-    
+
     // Injeta flash nas funções de feedback
     const origSuccess = showToast;
     showToast = function(title, desc, type = 'success') {
-        // Flash verde/vermelho
         if (flashEnabled) {
             if (type === 'success') showReaderFlash('success');
             else if (type === 'error') showReaderFlash('error');
         }
         return origSuccess.call(this, title, desc, type);
     };
+
+    initSettingsPopup();
 });
 
 // Pausa a sincronização quando a janela do navegador perde o foco (economiza CPU/Servidor)

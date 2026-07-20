@@ -64,6 +64,37 @@
                         <button class="sound-dropdown-item" data-sound="synthwave" title="Som Synthwave">🌌</button>
                     </div>
                 </div>
+                <!-- Botão Configurações -->
+                <button class="btn btn-icon" id="btn-open-settings" title="Configurações">
+                    <span>⚙️</span>
+                </button>
+                <!-- Menu Popup de Configurações -->
+                <div class="settings-popup" id="settings-popup" style="display:none;">
+                    <div class="settings-popup-header">
+                        <span class="settings-popup-title">Configurações</span>
+                        <button class="settings-popup-close" id="btn-close-settings">✕</button>
+                    </div>
+                    <div class="settings-popup-body">
+                        <label class="config-toggle">
+                            <input type="checkbox" id="popup-config-whatsapp">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">📱 Notificação por WhatsApp</span>
+                        </label>
+                        <div class="config-whatsapp-number" id="popup-config-whatsapp-number" style="display:none; margin: 8px 0 0 28px;">
+                            <input type="text" id="popup-whatsapp-number-input" class="input-despachante" placeholder="Número do gestor (ex: 5511999999999)" style="font-size:13px;">
+                        </div>
+                        <label class="config-toggle">
+                            <input type="checkbox" id="popup-config-foto">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">📸 Checklist com Foto ao finalizar</span>
+                        </label>
+                        <label class="config-toggle">
+                            <input type="checkbox" id="popup-config-flash">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">🟢 Flash verde na leitura</span>
+                        </label>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -238,34 +269,6 @@
 
                     <!-- Lado Direito: Listas de Despacho e Logs -->
                     <div class="admin-right-col" style="gap: 20px; display: flex; flex-direction: column;">
-                        <!-- Painel de Configurações da Expedição -->
-                        <div class="card glass-card shadow-lg" id="config-card" style="padding: 20px;">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
-                                <span style="font-size: 20px;">⚙️</span>
-                                <h2 class="card-title" style="margin: 0;">Configurações da Expedição</h2>
-                            </div>
-                            <div class="config-grid">
-                                <label class="config-toggle">
-                                    <input type="checkbox" id="config-whatsapp">
-                                    <span class="toggle-slider"></span>
-                                    <span class="toggle-label">📱 Notificação por WhatsApp</span>
-                                </label>
-                                <div class="config-whatsapp-number" id="config-whatsapp-number" style="display:none; margin: 8px 0 0 28px;">
-                                    <input type="text" id="whatsapp-number-input" class="input-despachante" placeholder="Número do gestor (ex: 5511999999999)" style="font-size:13px;">
-                                </div>
-                                <label class="config-toggle">
-                                    <input type="checkbox" id="config-foto">
-                                    <span class="toggle-slider"></span>
-                                    <span class="toggle-label">📸 Checklist com Foto ao finalizar</span>
-                                </label>
-                                <label class="config-toggle">
-                                    <input type="checkbox" id="config-flash">
-                                    <span class="toggle-slider"></span>
-                                    <span class="toggle-label">🟢 Flash verde na leitura</span>
-                                </label>
-                            </div>
-                        </div>
-
                         <!-- Painel de Listas de Despacho Ativas -->
                         <div class="card glass-card shadow-lg" id="despachantes-card" style="padding: 20px;">
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
