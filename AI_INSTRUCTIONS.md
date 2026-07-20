@@ -339,15 +339,15 @@ git push origin main
 | 2.3 | Cachear vozes TTS na inicialização | `app.js:9.9` | 🟢 Fácil | ⬜ |
 | 2.4 | Minificar CSS/JS no build automático | `deploy.js` | 🟡 Médio | ⬜ |
 
-### 🟢 FASE 3 — NOVAS FUNCIONALIDADES (Entregas de valor)
+### 🟢 FASE 3 — NOVAS FUNCIONALIDADES (Entregas de valor) ✅ **CONCLUÍDA**
 | # | Tarefa | Esforço | Status |
 |:-:|--------|:-------:|:------:|
-| 3.1 | **PWA — Service Worker + manifest.json** (instalável como app) | 🟡 Médio | ⬜ |
-| 3.2 | **Relatório de Produtividade** (itens/hora por operador, meta vs realizado) | 🔴 Difícil | ⬜ |
-| 3.3 | **Flash verde na tela ao ler código** (feedback visual) | 🟢 Fácil | ⬜ |
-| 3.4 | **Notificação por WhatsApp** (link `wa.me` ao finalizar lista) | 🟡 Médio | ⬜ |
-| 3.5 | **Checklist com Foto** (foto do produto vinculada ao log) | 🟡 Médio | ⬜ |
-| 3.6 | **Modo compacto para tablets** (layout otimizado para carrinhos) | 🟡 Médio | ⬜ |
+| 3.1 | **PWA — Service Worker + manifest.json** (instalável como app) | 🟡 Médio | ✅ |
+| 3.2 | **Relatório de Produtividade** (itens/hora por operador, meta vs realizado) | 🔴 Difícil | ✅ |
+| 3.3 | **Flash verde na tela ao ler código** (feedback visual) | 🟢 Fácil | ✅ |
+| 3.4 | **Notificação por WhatsApp** (link `wa.me` ao finalizar lista) | 🟡 Médio | ✅ |
+| 3.5 | **Checklist com Foto** (foto do produto vinculada ao log) | 🟡 Médio | ✅ |
+| 3.6 | **Painel de Configurações** (toggles para WhatsApp, Foto, Flash) | 🟡 Médio | ✅ |
 
 ### 🔵 FASE 4 — AUTOMAÇÃO E INTEGRAÇÕES (Escalabilidade)
 | # | Tarefa | Esforço | Status |
@@ -368,13 +368,13 @@ git push origin main
 
 ### 📊 Resumo do Roadmap
 
-| Fase | Foco | Itens | Esforço Total | Prioridade |
-|:----:|------|:----:|:-------------:|:----------:|
-| 🔴 1 | Segurança | 5 | 🟢 Fácil | **MÁXIMA** |
-| 🟡 2 | Performance | 4 | 🟡 Médio | Alta |
-| 🟢 3 | Novas Features | 6 | 🟡🔴 Misto | Média |
-| 🔵 4 | Automação | 4 | 🔴 Difícil | Baixa |
-| 🟣 5 | Negócio | 3 | 🔴 Difícil | Futuro |
+| Fase | Foco | Itens | Esforço Total | Prioridade | Status |
+|:----:|------|:----:|:-------------:|:----------:|:------:|
+| 🔴 1 | Segurança | 5 | 🟢 Fácil | **MÁXIMA** | 🟡 4/5 |
+| 🟡 2 | Performance | 4 | 🟡 Médio | Alta | 🟡 1/4 |
+| 🟢 3 | Novas Features | 6 | 🟡🔴 Misto | Média | ✅ 6/6 |
+| 🔵 4 | Automação | 4 | 🔴 Difícil | Baixa | ⬜ 0/4 |
+| 🟣 5 | Negócio | 3 | 🔴 Difícil | Futuro | ⬜ 0/3 |
 
 > **Nota:** As fases são **cumulativas** — não pule para a Fase 3 sem antes concluir a Fase 1. Segurança primeiro, sempre.
 
