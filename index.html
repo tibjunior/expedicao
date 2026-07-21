@@ -36,34 +36,6 @@
                 </div>
             </div>
             <div class="header-actions">
-                <!-- Botão TTS (Voz) -->
-                <button class="btn btn-icon" id="btn-tts-toggle" title="Confirmação por Voz" style="font-size:16px;">
-                    <span>🔊</span>
-                </button>
-                <!-- Botão Modo Turbo -->
-                <button class="btn btn-icon" id="btn-turbo-toggle" title="Modo Turbo (sem animações)" style="font-size:16px;">
-                    <span>⚡</span>
-                </button>
-                <!-- Botão Fullscreen -->
-                <button class="btn btn-icon" id="btn-fullscreen" title="Tela Cheia (F11)" style="font-size:18px;">
-                    <span>⛶</span>
-                </button>
-                <!-- Botão Paleta de Comandos -->
-                <button class="btn btn-icon" id="btn-palette" title="Paleta de Comandos (Ctrl+K)" style="font-size:18px; font-weight:700;">
-                    <span>⌘</span>
-                </button>
-                <div class="custom-sound-dropdown" id="sound-dropdown-container">
-                    <button class="btn btn-icon dropdown-sound-trigger-btn" id="sound-dropdown-trigger" title="Configurar Som">
-                        <span class="icon" id="active-sound-icon">🔊</span>
-                    </button>
-                    <div class="sound-dropdown-menu-list" id="sound-dropdown-menu">
-                        <button class="sound-dropdown-item" data-sound="mute" title="Mutar Som">🔇</button>
-                        <button class="sound-dropdown-item active" data-sound="classic" title="Som Clássico">🔊</button>
-                        <button class="sound-dropdown-item" data-sound="retro" title="Som Arcade">🎮</button>
-                        <button class="sound-dropdown-item" data-sound="melodic" title="Sinos Suaves">🔔</button>
-                        <button class="sound-dropdown-item" data-sound="synthwave" title="Som Synthwave">🌌</button>
-                    </div>
-                </div>
                 <!-- Botão Configurações -->
                 <button class="btn btn-icon" id="btn-open-settings" title="Configurações">
                     <span>⚙️</span>
@@ -75,10 +47,44 @@
                         <button class="settings-popup-close" id="btn-close-settings">✕</button>
                     </div>
                     <div class="settings-popup-body">
+                        <!-- Configurações de Interface -->
+                        <div class="settings-section-title">Interface</div>
+                        <label class="config-toggle">
+                            <input type="checkbox" id="popup-config-tts">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">🔊 Confirmação por Voz (TTS)</span>
+                        </label>
+                        <label class="config-toggle">
+                            <input type="checkbox" id="popup-config-turbo">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">⚡ Modo Turbo (sem animações)</span>
+                        </label>
+                        
+                        <!-- Configurações de Som -->
+                        <div class="settings-section-title">Som</div>
+                        <div class="config-sound-buttons">
+                            <button class="btn btn-outline" data-sound="mute" title="Mutar">🔇</button>
+                            <button class="btn btn-outline active" data-sound="classic" title="Clássico">🔊</button>
+                            <button class="btn btn-outline" data-sound="retro" title="Arcade">🎮</button>
+                            <button class="btn btn-outline" data-sound="melodic" title="Suave">🔔</button>
+                            <button class="btn btn-outline" data-sound="synthwave" title="Synthwave">🌌</button>
+                        </div>
+                        
+                        <!-- Atalhos -->
+                        <div class="settings-section-title">Atalhos</div>
+                        <button class="btn btn-outline w-full" id="btn-config-palette">
+                            ⌘ Paleta de Comandos (Ctrl+K)
+                        </button>
+                        <button class="btn btn-outline w-full" id="btn-config-fullscreen">
+                            ⛶ Tela Cheia (F11)
+                        </button>
+                        
+                        <!-- Configurações de Conferência -->
+                        <div class="settings-section-title">Conferência</div>
                         <label class="config-toggle">
                             <input type="checkbox" id="popup-config-whatsapp">
                             <span class="toggle-slider"></span>
-                            <span class="toggle-label">📱 Notificação por WhatsApp</span>
+                            <span class="toggle-label">📱 Notificação WhatsApp</span>
                         </label>
                         <div class="config-whatsapp-number" id="popup-config-whatsapp-number" style="display:none; margin: 8px 0 0 28px;">
                             <input type="text" id="popup-whatsapp-number-input" class="input-despachante" placeholder="Número do gestor (ex: 5511999999999)" style="font-size:13px;">
@@ -86,7 +92,7 @@
                         <label class="config-toggle">
                             <input type="checkbox" id="popup-config-foto">
                             <span class="toggle-slider"></span>
-                            <span class="toggle-label">📸 Checklist com Foto ao finalizar</span>
+                            <span class="toggle-label">📸 Checklist com Foto</span>
                         </label>
                         <label class="config-toggle">
                             <input type="checkbox" id="popup-config-flash">

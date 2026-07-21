@@ -4563,6 +4563,97 @@ function initSettingsPopup() {
     popup.addEventListener('click', (e) => {
         e.stopPropagation();
     });
+    
+    // Botão Paleta de Comandos no popup
+    const btnConfigPalette = document.getElementById('btn-config-palette');
+    if (btnConfigPalette) {
+        btnConfigPalette.addEventListener('click', () => {
+            openPalette();
+            closePopup();
+        });
+    }
+    
+    // Botão Tela Cheia no popup
+    const btnConfigFullscreen = document.getElementById('btn-config-fullscreen');
+    if (btnConfigFullscreen) {
+        btnConfigFullscreen.addEventListener('click', () => {
+            toggleFullscreen();
+        });
+    }
+    
+    // Botões de som no popup
+    const soundButtons = popup.querySelectorAll('.config-sound-buttons .btn');
+    soundButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const soundType = btn.getAttribute('data-sound');
+            
+            // Atualiza classe active
+            soundButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            if (soundType === 'mute') {
+                state.soundEnabled = false;
+            } else {
+                state.soundEnabled = true;
+                state.soundProfile = soundType;
+                localStorage.setItem('expedicao_sound_profile', soundType);
+            }
+            
+            localStorage.setItem('expedicao_sound', state.soundEnabled);
+            updateSoundButtonIcon();
+            
+            // Toca som de confirmação
+            if (state.soundEnabled) {
+                playSoundEffect('unit');
+            }
+        });
+    });
+    
+    // Toggle TTS no popup
+    const popupTts = document.getElementById('popup-config-tts');
+    if (popupTts) {
+        const savedTTS = localStorage.getItem('expedicao_tts');
+        ttsEnabled = savedTTS !== '0';
+        popupTts.checked = ttsEnabled;
+        
+        popupTts.addEventListener('change', () => {
+            ttsEnabled = popupTts.checked;
+            localStorage.setItem('expedicao_tts', ttsEnabled ? '1' : '0');
+            
+            const btnTTS = document.getElementById('btn-tts-toggle');
+            if (btnTTS) {
+                btnTTS.classList.toggle('active', ttsEnabled);
+                btnTTS.querySelector('span').textContent = ttsEnabled ? '🔊' : '🔇';
+            }
+            
+            showToast(ttsEnabled ? 'Voz Ativada' : 'Voz Desativada', 
+                ttsEnabled ? 'O sistema falará o nome dos produtos após cada leitura.' : 'Confirmação por voz desligada.', 'success');
+        });
+    }
+    
+    // Toggle Turbo no popup
+    const popupTurbo = document.getElementById('popup-config-turbo');
+    if (popupTurbo) {
+        const savedTurbo = localStorage.getItem('expedicao_turbo');
+        turboMode = savedTurbo === '1';
+        popupTurbo.checked = turboMode;
+        
+        popupTurbo.addEventListener('change', () => {
+            turboMode = popupTurbo.checked;
+            localStorage.setItem('expedicao_turbo', turboMode ? '1' : '0');
+            
+            document.body.classList.toggle('turbo-mode', turboMode);
+            
+            const btnTurbo = document.getElementById('btn-turbo-toggle');
+            if (btnTurbo) {
+                btnTurbo.classList.toggle('active', turboMode);
+                btnTurbo.querySelector('span').textContent = turboMode ? '⚡' : '⚡';
+            }
+            
+            showToast(turboMode ? 'Modo Turbo Ativado' : 'Modo Turbo Desativado', 
+                turboMode ? 'Animações desligadas para máxima performance.' : 'Animações restauradas.', 'success');
+        });
+    }
 }
 
 function applySettingsFromPopup() {

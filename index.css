@@ -1269,6 +1269,38 @@ body.light-mode .sku-badge {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.settings-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    padding: 8px 0 4px;
+    border-bottom: 1px solid var(--border-color);
+    margin-top: 4px;
+}
+
+.config-sound-buttons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.config-sound-buttons .btn {
+    flex: 1;
+    min-width: 40px;
+    padding: 8px 4px;
+    font-size: 13px;
+}
+
+.config-sound-buttons .btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
 }
 
 /* ==========================================

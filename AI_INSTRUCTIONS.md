@@ -12,7 +12,7 @@ Este documento serve como **manual de referência primário** para qualquer agen
 4. [Falhas de Segurança Conhecidas](#4-falhas-de-segurança-conhecidas)
 5. [Melhorias Recomendadas](#5-melhorias-recomendadas)
 6. [Regras de Desenvolvimento](#6-regras-de-desenvolvimento)
-7. [Deploy e Manutenção](#7-deploy-e-manutenção)
+7. [Deploy e Manutenção](#7-deploy-e-manutação)
 8. [Próximos Passos Prioritários](#8-próximos-passos-prioritários)
 
 ---
@@ -336,7 +336,7 @@ git push origin main
 | 1.1 | Sanitizar todos os inputs na api.php (anti SQL Injection) | `api.php` | 🟢 Fácil | ✅ |
 | 1.2 | Mover banco SQLite para fora da pasta pública (`../`) | `api.php:12` + `.htaccess` | 🟢 Fácil | ✅ |
 | 1.3 | Restringir CORS para domínios específicos | `api.php:2` | 🟢 Fácil | ✅ |
-| 1.4 | Adicionar autenticação por token na API | `app.js` + `api.php` | 🟡 Médio | ✅ |
+| 1.4 | Adicionar autenticação por token na API | `api.php` + `app.js` | 🟡 Médio | ✅ |
 | 1.5 | Mover credenciais FTP para variável de ambiente | `deploy.js` + `.env` | 🟢 Fácil | ⬜ |
 
 ### 🟡 FASE 2 — PERFORMANCE (Melhorar fluidez do sistema)
@@ -389,4 +389,4 @@ git push origin main
 
 ---
 
-*Documento gerado em 20/07/2026 · Última atualização: 21/07/2026 10:40 · Mantenha atualizado com cada nova funcionalidade*
+*Documento gerado em 20/07/2026 · Última atualização: 21/07/2026 12:05 · Mantenha atualizado com cada nova funcionalidade*
