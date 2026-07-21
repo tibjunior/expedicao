@@ -134,6 +134,7 @@ O sistema pode operar em **3 modos**:
 | 29 | **Romaneio** 🖨️ | `app.js:9.11` | Botão 🖨️ no progresso — impressão térmica 80mm |
 | 30 | **Backup Automático** 💾 | `app.js:9.12` | Snapshots a cada 5min + botão restaurar na admin |
 | 31 | **Menu Popup de Configurações** ⚙️ | `app.js:9.19` | Botão ⚙️ no header — popup com toggles |
+| 32 | **Visualizar PDF Original** 📄 | `app.js:9.20` | Botão 📄 no progresso — modal com iframe do PDF |
 
 ---
 
@@ -191,7 +192,7 @@ if (in_array($origin, $allowed)) {
 
 | Prioridade | Melhoria | Arquivo | Esforço |
 |:----------:|----------|---------|:-------:|
-| Alta | Debounce na busca (200ms) | `app.js:784` | 🟢 Fácil |
+| Alta | Debounce na busca (200ms) | `app.js:1386` | 🟢 Fácil |
 | Alta | Virtual scrolling p/ 500+ itens | `app.js:1373` | 🔴 Difícil |
 | Média | Cache de vozes TTS | `app.js:9.9` | 🟢 Fácil |
 | Média | Minificar CSS/JS no build | `deploy.js` | 🟡 Médio |
@@ -213,6 +214,7 @@ if (in_array($origin, $allowed)) {
 | Média | **Roteirização** | Manifesto de transporte agrupado por CEP | 🔴 Difícil |
 | Média | **WhatsApp Notification** | Aviso via link `wa.me` ao finalizar lista | 🟡 Médio |
 | Média | **Checklist com Foto** | Foto do produto expedido vinculada ao log | 🟡 Médio |
+| Média | **Modal de Visualização de PDF** | Visualizar PDF original em popup/modal | 🟢 Fácil |
 | Baixa | **Integração Marketplaces** | API Shopee/ML/Amazon para importar pedidos | 🔴 Difícil |
 | Baixa | **Controle de Lotes/Validade** | Alertas de vencimento na expedição | 🟡 Médio |
 | Baixa | **Multi-empresa (SaaS)** | Tenant isolation com `empresa_id` | 🔴 Difícil |
@@ -304,6 +306,11 @@ git push origin main
 ### 🟢 Novas Funcionalidades
 7. ~~Service Worker para PWA~~ ✅ **Concluído**
 8. ~~Relatório de produtividade~~ ✅ **Concluído**
+9. ~~Flash verde na leitura~~ ✅ **Concluído**
+10. ~~Notificação por WhatsApp~~ ✅ **Concluído**
+11. ~~Checklist com Foto~~ ✅ **Concluído**
+12. ~~Menu Popup de Configurações~~ ✅ **Concluído**
+13. ~~Visualizar PDF Original em Modal~~ ✅ **Concluído**
 
 ---
 
@@ -349,6 +356,7 @@ git push origin main
 | 3.4 | **Notificação por WhatsApp** (link `wa.me` ao finalizar lista) | 🟡 Médio | ✅ |
 | 3.5 | **Checklist com Foto** (foto do produto vinculada ao log) | 🟡 Médio | ✅ |
 | 3.6 | **Menu Popup de Configurações** ⚙️ (botão no header com toggles) | 🟡 Médio | ✅ |
+| 3.7 | **Visualizar PDF Original em Modal** 📄 (popup com iframe) | 🟢 Fácil | ✅ |
 
 ### 🔵 FASE 4 — AUTOMAÇÃO E INTEGRAÇÕES (Escalabilidade)
 | # | Tarefa | Esforço | Status |
@@ -373,7 +381,7 @@ git push origin main
 |:----:|------|:----:|:-------------:|:----------:|:------:|
 | 🔴 1 | Segurança | 5 | 🟢 Fácil | **MÁXIMA** | 🟡 4/5 |
 | 🟡 2 | Performance | 4 | 🟡 Médio | Alta | 🟡 1/4 |
-| 🟢 3 | Novas Features | 6 | 🟡🔴 Misto | Média | ✅ 6/6 |
+| 🟢 3 | Novas Features | 7 | 🟡🔴 Misto | Média | ✅ 7/7 |
 | 🔵 4 | Automação | 4 | 🔴 Difícil | Baixa | ⬜ 0/4 |
 | 🟣 5 | Negócio | 3 | 🔴 Difícil | Futuro | ⬜ 0/3 |
 
@@ -381,4 +389,4 @@ git push origin main
 
 ---
 
-*Documento gerado em 20/07/2026 · Última atualização: 21/07/2026 09:40 · Mantenha atualizado com cada nova funcionalidade*
+*Documento gerado em 20/07/2026 · Última atualização: 21/07/2026 10:40 · Mantenha atualizado com cada nova funcionalidade*

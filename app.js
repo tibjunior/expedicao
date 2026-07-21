@@ -1785,9 +1785,18 @@ function resetState() {
  * Abre o PDF original carregado em uma nova aba do navegador para conferência.
  */
 async function viewOriginalPdf() {
+    const modal = document.getElementById('pdf-viewer-modal');
+    const iframe = document.getElementById('pdf-iframe');
+    
     if (state.pdfBlob) {
         const fileURL = URL.createObjectURL(state.pdfBlob);
-        window.open(fileURL, '_blank');
+        if (modal && iframe) {
+            iframe.src = fileURL;
+            modal.style.display = 'flex';
+        } else {
+            // Fallback se o modal não existir
+            window.open(fileURL, '_blank');
+        }
         return;
     }
 
@@ -1799,7 +1808,13 @@ async function viewOriginalPdf() {
             const blob = await response.blob();
             state.pdfBlob = new File([blob], 'teste.pdf', { type: 'application/pdf' });
             const fileURL = URL.createObjectURL(state.pdfBlob);
-            window.open(fileURL, '_blank');
+            
+            if (modal && iframe) {
+                iframe.src = fileURL;
+                modal.style.display = 'flex';
+            } else {
+                window.open(fileURL, '_blank');
+            }
         } catch (err) {
             console.error('Falha ao obter teste.pdf:', err);
             showToast('Erro de Conexão', 'Não foi possível buscar o teste.pdf local.', 'error');

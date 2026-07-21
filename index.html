@@ -448,6 +448,19 @@
         </div>
     </div>
 
+    <!-- Modal para Visualizar PDF Original -->
+    <div id="pdf-viewer-modal" style="display: none;">
+        <div class="pdf-viewer-card">
+            <div class="pdf-viewer-header">
+                <span class="pdf-viewer-title">📄 PDF Original</span>
+                <button class="settings-popup-close" id="btn-close-pdf-viewer">✕</button>
+            </div>
+            <div class="pdf-viewer-body">
+                <iframe id="pdf-iframe" src="" frameborder="0" style="width: 100%; height: 70vh; border-radius: 8px; background: #fff;"></iframe>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts da aplicação -->
     <script src="pdf-parser.js?v=2"></script>
     <script src="app.js?v=2"></script>
