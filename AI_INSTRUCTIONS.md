@@ -298,12 +298,12 @@ git push origin main
 4. Adicionar autenticação por token na API
 
 ### 🟡 Performance
-5. Adicionar debounce na busca (200ms)
+5. ~~Adicionar debounce na busca (200ms)~~ ✅ **Concluído**
 6. Implementar paginação na tabela (50 itens por página)
 
 ### 🟢 Novas Funcionalidades
-7. Service Worker para PWA (instalável como app)
-8. Relatório de produtividade (itens/hora por operador)
+7. ~~Service Worker para PWA~~ ✅ **Concluído**
+8. ~~Relatório de produtividade~~ ✅ **Concluído**
 
 ---
 
@@ -381,4 +381,4 @@ git push origin main
 
 ---
 
-*Documento gerado em 20/07/2026 · Última atualização: 20/07/2026 17:00 · Mantenha atualizado com cada nova funcionalidade*
+*Documento gerado em 20/07/2026 · Última atualização: 21/07/2026 09:40 · Mantenha atualizado com cada nova funcionalidade*
