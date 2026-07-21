@@ -1059,6 +1059,11 @@ async function processBarcodeRead(rawSku) {
             matchedItem.quantidade = 0;
             matchedItem.expedido = true;
             matchedItem.dataExpedicao = new Date().toISOString();
+            
+            // Integração Tiny: solicita etiqueta se habilitado
+            if (matchedItem.ec && localStorage.getItem('expedicao_tiny_enabled') === '1') {
+                solicitarEtiquetaTiny(matchedItem.ec);
+            }
         }
         
         // Atualiza item no IndexedDB
@@ -4524,6 +4529,83 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // -------------------------------------------------------
+// 9.20. INTEGRAÇÃO TINY — IMPRESSÃO DE ETIQUETAS
+// -------------------------------------------------------
+let tinyPrintedOrders = new Set(); // Rastreia pedidos que já tiveram etiqueta impressa
+
+async function solicitarEtiquetaTiny(numeroPedido) {
+    const endpoint = localStorage.getItem('expedicao_tiny_endpoint') || '';
+    const token = localStorage.getItem('expedicao_tiny_token') || '';
+    
+    if (!endpoint || !token) {
+        console.warn('Tiny: endpoint ou token não configurados');
+        return;
+    }
+    
+    // Verifica se já foi impressa (deduplicação)
+    if (tinyPrintedOrders.has(numeroPedido)) {
+        console.log(`Tiny: etiqueta já solicitada para ${numeroPedido}`);
+        return;
+    }
+    
+    try {
+        showToast('Imprimindo Etiqueta', `Solicitando etiqueta para pedido ${numeroPedido}...`, 'success');
+        
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                numero_pedido: numeroPedido
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+        
+        // Tenta ler como PDF
+        const blob = await response.blob();
+        
+        if (blob.type === 'application/pdf') {
+            // Abre PDF em nova aba para impressão
+            const fileURL = URL.createObjectURL(blob);
+            window.open(fileURL, '_blank');
+        } else {
+            // Se não for PDF, tenta ler como JSON (pode ser uma URL)
+            const text = await blob.text();
+            const data = JSON.parse(text);
+            
+            if (data.url) {
+                window.open(data.url, '_blank');
+            } else if (data.pdf_base64) {
+                // Converte base64 para blob e abre
+                const binaryString = atob(data.pdf_base64);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                const pdfBlob = new Blob([bytes], { type: 'application/pdf' });
+                const fileURL = URL.createObjectURL(pdfBlob);
+                window.open(fileURL, '_blank');
+            } else {
+                throw new Error('Formato de resposta não reconhecido');
+            }
+        }
+        
+        // Marca como impresso
+        tinyPrintedOrders.add(numeroPedido);
+        showToast('Etiqueta Gerada', `Etiqueta do pedido ${numeroPedido} aberta para impressão!`, 'success');
+        
+    } catch (error) {
+        console.error('Erro ao solicitar etiqueta Tiny:', error);
+        showToast('Erro na Etiqueta', `Não foi possível gerar a etiqueta: ${error.message}`, 'error');
+    }
+}
+
+// -------------------------------------------------------
 // 9.19. MENU POPUP DE CONFIGURAÇÕES (HEADER)
 // -------------------------------------------------------
 function initSettingsPopup() {
@@ -4652,6 +4734,47 @@ function initSettingsPopup() {
             
             showToast(turboMode ? 'Modo Turbo Ativado' : 'Modo Turbo Desativado', 
                 turboMode ? 'Animações desligadas para máxima performance.' : 'Animações restauradas.', 'success');
+        });
+    }
+    
+    // Configurações Tiny - Impressão de Etiquetas
+    const popupTinyEnabled = document.getElementById('popup-config-tiny-enabled');
+    const popupTinyEndpoint = document.getElementById('popup-tiny-endpoint');
+    const popupTinyToken = document.getElementById('popup-tiny-token');
+    const popupTinySection = document.getElementById('popup-config-tiny-section');
+    
+    if (popupTinyEnabled && popupTinyEndpoint && popupTinyToken) {
+        // Carregar configurações salvas
+        const tinyEnabled = localStorage.getItem('expedicao_tiny_enabled') === '1';
+        const tinyEndpoint = localStorage.getItem('expedicao_tiny_endpoint') || '';
+        const tinyToken = localStorage.getItem('expedicao_tiny_token') || '';
+        
+        popupTinyEnabled.checked = tinyEnabled;
+        popupTinyEndpoint.value = tinyEndpoint;
+        popupTinyToken.value = tinyToken;
+        
+        if (popupTinySection) {
+            popupTinySection.style.display = tinyEnabled ? 'block' : 'none';
+        }
+        
+        // Toggle para mostrar/esconder seção
+        popupTinyEnabled.addEventListener('change', () => {
+            const enabled = popupTinyEnabled.checked;
+            localStorage.setItem('expedicao_tiny_enabled', enabled ? '1' : '0');
+            
+            if (popupTinySection) {
+                popupTinySection.style.display = enabled ? 'block' : 'none';
+            }
+        });
+        
+        // Salvar endpoint
+        popupTinyEndpoint.addEventListener('input', () => {
+            localStorage.setItem('expedicao_tiny_endpoint', popupTinyEndpoint.value.trim());
+        });
+        
+        // Salvar token
+        popupTinyToken.addEventListener('input', () => {
+            localStorage.setItem('expedicao_tiny_token', popupTinyToken.value.trim());
         });
     }
 }

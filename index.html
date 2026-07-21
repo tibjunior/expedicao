@@ -99,6 +99,20 @@
                             <span class="toggle-slider"></span>
                             <span class="toggle-label">🟢 Flash verde na leitura</span>
                         </label>
+                        
+                        <!-- Integração Tiny - Impressão de Etiquetas -->
+                        <div class="settings-section-title">🖨️ Tiny ERP — Etiquetas</div>
+                        <label class="config-toggle">
+                            <input type="checkbox" id="popup-config-tiny-enabled">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">Impressão Automática de Etiquetas</span>
+                        </label>
+                        <div class="config-tiny-section" id="popup-config-tiny-section" style="display:none; margin: 8px 0 0 0;">
+                            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Endpoint da API Tiny</label>
+                            <input type="text" id="popup-tiny-endpoint" class="input-despachante" placeholder="https://api.tiny.com.br/api2/gerar_etiqueta.php" style="font-size: 12px; margin-bottom: 8px;">
+                            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">API Token</label>
+                            <input type="password" id="popup-tiny-token" class="input-despachante" placeholder="Token de acesso da API Tiny" style="font-size: 12px;">
+                        </div>
                     </div>
                 </div>
             </div>
