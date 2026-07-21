@@ -389,4 +389,75 @@ git push origin main
 
 ---
 
-*Documento gerado em 20/07/2026 · Última atualização: 21/07/2026 12:05 · Mantenha atualizado com cada nova funcionalidade*
+## 10. Plano Futuro: Integração Tiny — Impressão de Etiquetas
+
+**Status:** 📋 Planejado (aguardando informações do usuário)
+
+### Visão Geral
+ automatizar a impressão de etiquetas de envio sempre que um pedido for **conferido e expedido**. O sistema deverá consultar a API do Tiny ERP para gerar a etiqueta correspondente ao número do pedido.
+
+### Funcionamento Esperado
+1. Quando um item for bipado e **marcado como expedido** (em `processBarcodeRead()`)
+2. O sistema identifica o **número do pedido** pelo campo `ec` (extraído do PDF)
+3. Dispara uma requisição para o **endpoint da API Tiny** (configurado no popup de configurações)
+4. Abre o PDF da etiqueta retornado em uma nova aba para impressão
+
+### Campos de Configuração Necessários (Popup ⚙️)
+
+No menu popup de configurações, adicionar:
+
+1. **Endereço do Endpoint Tiny** (input text)
+   - Onde colar a URL do endpoint fornecido pelo Tiny
+   - Exemplo: `https://api.tiny.com.br/api2/gerar_etiqueta.php`
+
+2. **API Token do Tiny** (input password)
+   - Token de autenticação da API do Tiny ERP
+   - Deve ser armazenado no `localStorage` criptografado (se possível)
+
+3. **Toggle Ativar Impressão Automática** (checkbox)
+   - Ativa/desativa a funcionalidade
+   - Padrão: desativado
+
+### Fluxo Técnico
+
+```
+processBarcodeRead() 
+    ↓ (item expedido com sucesso)
+identificarPedido() 
+    ↓ (busca campo `ec` do item)
+solicitarEtiquetaTiny(numeroPedido)
+    ↓ (fetch POST para endpoint Tiny)
+respostaTiny()
+    ↓ (processa retorno: PDF base64 ou URL)
+abrirEtiqueta(blobPdf)
+```
+
+### Considerações Técnicas
+
+- **Número do pedido:** Campo `ec` do item no IndexedDB — formatos variam por plataforma (Shopee, MercadoLivre/Transportadora, Amazon, Magalu)
+- **Disparo único:** Verificar se a etiqueta já foi solicitada para aquele pedido antes de repetir (evitar duplicatas)
+- **Formato de retorno:** Aguardando definição — pode ser PDF em base64, URL temporária, ou outro formato
+- **Tratamento de erros:** Se a API Tiny falhar, não bloquear o fluxo de expedição — apenas logar o erro e notificar o operador via toast
+
+### Status das Respostas do Usuário
+
+| Campo | Valor | Status |
+|-------|-------|--------|
+| Endpoint | A ser fornecido pelo usuário | ⏳ Aguardando |
+| API Token | A ser fornecido pelo usuário | ⏳ Aguardando |
+| Formato de retorno | A ser confirmado (base64/URL?) | ❓ Não informado |
+| CPF/CNPJ necessário | Não informado | ❓ Não informado |
+| Chave de acesso | Não informado | ❓ Não informado |
+
+### Próximos Passos (quando o usuário fornecer as informações)
+
+1. Adicionar campos de configuração no popup de configurações (HTML + CSS)
+2. Criar função `solicitarEtiquetaTiny(numeroPedido, token, endpoint)`
+3. Implementar lógica de deduplicação (evitar múltiplas requisições por mesmo pedido)
+4. Integrar no fluxo de expedição (`processBarcodeRead`)
+5. Adicionar tratamento de erros e feedback ao operador
+6. Testar com cada plataforma (Shopee, ML, Amazon, Magalu)
+
+---
+
+*Documento gerado em 20/07/2026 · Última atualização: 21/07/2026 16:13 · Mantenha atualizado com cada nova funcionalidade*
