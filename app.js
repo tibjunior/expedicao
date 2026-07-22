@@ -334,6 +334,32 @@ class ExpedicaoDB {
         });
     }
 
+    async deleteLogsByDespachante(despachanteId) {
+        if (!this.isLocal) {
+            return this.apiPost('delete_logs', { despachante_id: despachanteId })
+                .then(() => true);
+        }
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['logs'], 'readwrite');
+            const store = transaction.objectStore('logs');
+            const index = store.index('despachante_id');
+            const range = IDBKeyRange.only(despachanteId);
+            
+            const request = index.openCursor(range);
+            request.onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    cursor.delete();
+                    cursor.continue();
+                }
+            };
+            
+            transaction.oncomplete = () => resolve(true);
+            transaction.onerror = (e) => reject(e);
+        });
+    }
+
     getLogsByDespachante(despachanteId) {
         if (!this.isLocal) {
             return this.apiGet('get_logs', { despachante_id: despachanteId || 0 })
@@ -2051,34 +2077,22 @@ function renderLogs() {
     });
 }
 
-// Limpa os logs do despachante ativo no IndexedDB
+// Limpa os logs do despachante ativo
 async function clearLogs() {
     if (!state.activeDespachanteId) return;
     if (confirm('Deseja realmente esvaziar todo o histórico de auditoria deste despachante?')) {
         try {
-            const transaction = db.db.transaction(['logs'], 'readwrite');
-            const store = transaction.objectStore('logs');
-            const index = store.index('despachante_id');
-            const range = IDBKeyRange.only(state.activeDespachanteId);
+            // Usa o método da classe DB que funciona tanto para IndexedDB (local) quanto API (remoto)
+            await db.deleteLogsByDespachante(state.activeDespachanteId);
             
-            const getLogsReq = index.openCursor(range);
-            getLogsReq.onsuccess = (e) => {
-                const cursor = e.target.result;
-                if (cursor) {
-                    cursor.delete();
-                    cursor.continue();
-                }
-            };
-            
-            transaction.oncomplete = () => {
-                state.logs = [];
-                renderLogs();
-                showToast('Auditoria Limpa', 'Histórico do despachante foi redefinido.', 'success');
-                playSoundEffect('cancel');
-            };
+            // Atualiza o state e a UI
+            state.logs = [];
+            renderLogs();
+            showToast('Auditoria Limpa', 'Histórico do despachante foi redefinido com sucesso.', 'success');
+            playSoundEffect('cancel');
         } catch (err) {
-            console.error('Falha ao limpar logs no IndexedDB:', err);
-            showToast('Erro ao Limpar', 'Não foi possível apagar os logs do banco local.', 'error');
+            console.error('Falha ao limpar logs:', err);
+            showToast('Erro ao Limpar', 'Não foi possível apagar os logs do banco.', 'error');
         }
     }
 }
