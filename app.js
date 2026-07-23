@@ -4769,9 +4769,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // 9.18. INICIALIZAÇÃO DA FASE 3
 // -------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-    // PWA
-    registerServiceWorker();
-
     // Injeta flash nas funções de feedback
     const origSuccess = showToast;
     showToast = function(title, desc, type = 'success') {
