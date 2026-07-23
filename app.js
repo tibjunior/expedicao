@@ -4090,8 +4090,10 @@ function setupFlashConfig() {
 document.addEventListener('DOMContentLoaded', setupFlashConfig);
 
 // -------------------------------------------------------
-// 9.14. NOTIFICAÇÃO WHATSAPP (Ideia 3.4)
+// PWA - SERVICE WORKER (Ideia 3.1) REMOVIDO
 // -------------------------------------------------------
+// Funcionalidade PWA foi removida porque o manifest dinâmico via Blob URL não é suportado pelos navegadores.
+// Quando quiser implementar PWA, crie um arquivo sw.js e manifest.json reais no servidor.
 let whatsappEnabled = false;
 let whatsappNumber = '';
 
@@ -4329,87 +4331,7 @@ renderLogs = function() {
 
 document.addEventListener('DOMContentLoaded', setupFotoConfig);
 
-// -------------------------------------------------------
-// 9.16. PWA - SERVICE WORKER (Ideia 3.1)
-// -------------------------------------------------------
-function registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-        // Cria o manifest.json dinamicamente
-        const manifest = {
-            name: 'Expedição Inteligente',
-            short_name: 'Expedição',
-            description: 'Sistema de expedição e conferência de vendas',
-            start_url: './index.html',
-            display: 'standalone',
-            background_color: '#0a0b10',
-            theme_color: '#6366f1',
-            icons: [
-                { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml' }
-            ]
-        };
-        
-        // Injeta o manifest no head
-        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-        const manifestURL = URL.createObjectURL(manifestBlob);
-        const link = document.createElement('link');
-        link.rel = 'manifest';
-        link.href = manifestURL;
-        document.head.appendChild(link);
-        
-        // Registra o service worker
-        const swCode = `
-        const CACHE_NAME = 'expedicao-v1';
-        const URLS_TO_CACHE = [
-            './',
-            './index.html',
-            './index.css',
-            './app.js',
-            './pdf-parser.js',
-            './favicon.svg',
-            './teste.pdf'
-        ];
-        
-        self.addEventListener('install', (event) => {
-            event.waitUntil(
-                caches.open(CACHE_NAME).then((cache) => {
-                    return cache.addAll(URLS_TO_CACHE);
-                })
-            );
-        });
-        
-        self.addEventListener('fetch', (event) => {
-            event.respondWith(
-                caches.match(event.request).then((response) => {
-                    if (response) return response;
-                    return fetch(event.request).catch(() => {
-                        return caches.match('./index.html');
-                    });
-                })
-            );
-        });
-        
-        self.addEventListener('activate', (event) => {
-            event.waitUntil(
-                caches.keys().then((names) => {
-                    return Promise.all(
-                        names.filter(name => name !== CACHE_NAME)
-                            .map(name => caches.delete(name))
-                    );
-                })
-            );
-        });
-        `;
-        
-        const swBlob = new Blob([swCode], { type: 'application/javascript' });
-        const swURL = URL.createObjectURL(swBlob);
-        
-        navigator.serviceWorker.register(swURL, { scope: './' }).then(() => {
-            console.log('✅ PWA: Service Worker registrado!');
-        }).catch(err => {
-            console.warn('❌ PWA: Erro ao registrar Service Worker:', err);
-        });
-    }
-}
+// PWA removida - manifest e service worker via Blob URL não são suportados pelos navegadores
 
 // -------------------------------------------------------
 // 9.17. RELATÓRIO DE PRODUTIVIDADE (Ideia 3.2)
