@@ -4715,23 +4715,8 @@ function initSettingsPopup() {
 }
 
 function applySettingsFromPopup() {
-    // As configurações agora são gerenciadas diretamente pelo popup,
-    // então não precisamos mais sincronizar com elementos antigos.
-    // Apenas garantimos que ops listeners de change/input dos setups
-    // foram disparados para salvar no localStorage.
-    
-    const popupWA = document.getElementById('popup-config-whatsapp');
-    const popupWANumber = document.getElementById('popup-config-whatsapp-number');
-    const popupNumberInput = document.getElementById('popup-whatsapp-number-input');
-    
-    if (popupWA && popupNumberInput) {
-        // Dispara eventos para atualizar variáveis globais e localStorage
-        popupWA.dispatchEvent(new Event('change'));
-        popupNumberInput.dispatchEvent(new Event('input'));
-        if (popupWANumber) {
-            popupWANumber.style.display = popupWA.checked ? 'block' : 'none';
-        }
-    }
+    // Apenas foto e flash precisam de dispatch manual
+    // WhatsApp já tem seu próprio listener no setupWhatsAppConfig
     
     const popupFoto = document.getElementById('popup-config-foto');
     if (popupFoto) {
@@ -4745,8 +4730,8 @@ function applySettingsFromPopup() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Eventos dos inputs do popup
-    const popupConfigs = ['popup-config-whatsapp', 'popup-config-foto', 'popup-config-flash'];
+    // Eventos dos inputs do popup (WhatsApp já tem listeners no setupWhatsAppConfig)
+    const popupConfigs = ['popup-config-foto', 'popup-config-flash'];
     popupConfigs.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -4755,13 +4740,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     });
-    
-    const popupNumberInput = document.getElementById('popup-whatsapp-number-input');
-    if (popupNumberInput) {
-        popupNumberInput.addEventListener('input', () => {
-            applySettingsFromPopup();
-        });
-    }
 });
 
 // -------------------------------------------------------
