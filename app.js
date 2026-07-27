@@ -336,7 +336,7 @@ class ExpedicaoDB {
 
     async deleteLogsByDespachante(despachanteId) {
         if (!this.isLocal) {
-            return this.apiPost('delete_logs', { despachante_id: despachanteId })
+            return this.apiPost('clear_logs', { despachante_id: despachanteId })
                 .then(() => true);
         }
 
@@ -4553,7 +4553,6 @@ function initSettingsPopup() {
     
     const openPopup = () => {
         popup.style.display = 'flex';
-        syncSettingsPopup();
     };
     
     const closePopup = () => {
