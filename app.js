@@ -3637,6 +3637,7 @@ document.addEventListener('DOMContentLoaded', () => {
 let ttsEnabled = true;
 let ttsVoice = null;
 let ttsUtterance = null;
+let ttsSpeed = 1.0; // Velocidade da fala: 0.7 (lenta), 1.0 (normal), 1.3 (rápida)
 
 function toggleTTS() {
     ttsEnabled = !ttsEnabled;
@@ -3670,7 +3671,7 @@ function speakText(text) {
     
     ttsUtterance = new SpeechSynthesisUtterance(text);
     ttsUtterance.lang = 'pt-BR';
-    ttsUtterance.rate = 1.1;
+    ttsUtterance.rate = ttsSpeed;
     ttsUtterance.pitch = 1.0;
     ttsUtterance.volume = 1.0;
     if (ttsVoice) ttsUtterance.voice = ttsVoice;
@@ -4645,6 +4646,22 @@ function initSettingsPopup() {
             
             showToast(ttsEnabled ? 'Voz Ativada' : 'Voz Desativada', 
                 ttsEnabled ? 'O sistema falará o nome dos produtos após cada leitura.' : 'Confirmação por voz desligada.', 'success');
+        });
+    }
+    
+    // Velocidade do TTS no popup
+    const popupTtsSpeed = document.getElementById('popup-config-tts-speed');
+    if (popupTtsSpeed) {
+        const savedSpeed = localStorage.getItem('expedicao_tts_speed');
+        if (savedSpeed) {
+            ttsSpeed = parseFloat(savedSpeed);
+            popupTtsSpeed.value = savedSpeed;
+        }
+        
+        popupTtsSpeed.addEventListener('change', () => {
+            ttsSpeed = parseFloat(popupTtsSpeed.value);
+            localStorage.setItem('expedicao_tts_speed', ttsSpeed.toString());
+            showToast('Velocidade Alterada', `Velocidade da fala: ${popupTtsSpeed.options[popupTtsSpeed.selectedIndex].text}`, 'success');
         });
     }
     
