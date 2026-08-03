@@ -129,6 +129,19 @@ body {
     z-index: 1000;
 }
 
+.header-logo {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    height: 40px;
+    max-height: 60%;
+    width: auto;
+    pointer-events: none;
+    z-index: 1;
+    object-fit: contain;
+}
+
 .logo-area {
     display: flex;
     align-items: center;
