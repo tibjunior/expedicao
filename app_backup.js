@@ -519,10 +519,10 @@ function initElements() {
     elements.emptyState = document.getElementById('empty-state');
     elements.tableContainer = document.getElementById('table-container');
     elements.itemsTableBody = document.getElementById('items-table-body');
-        elements.toast = document.getElementById('toast');
+    elements.toast = document.getElementById('toast');
     elements.filterBtns = document.querySelectorAll('[data-filter]');
     elements.listColumn = document.getElementById('list-column');
-        elements.btnViewPdf = document.getElementById('btn-view-pdf');
+    elements.btnViewPdf = document.getElementById('btn-view-pdf');
     elements.errorModal = document.getElementById('error-modal');
     elements.errorModalTitle = document.getElementById('error-modal-title');
     elements.errorModalDesc = document.getElementById('error-modal-desc');
@@ -899,7 +899,7 @@ function initEventListeners() {
         if (confirm(`Tem certeza que deseja deletar permanentemente o despachante "${state.activeDespachanteNome}" e todos os seus itens do banco local?`)) {
             deleteActiveDespachante();
         }
-            });
+    });
 
     // Visualizar PDF
     if (elements.btnViewPdf) {
@@ -1191,8 +1191,14 @@ async function processBarcodeRead(rawSku) {
             matchedItem.dataExpedicao = new Date().toISOString();
             
             // Integração Tiny: cada linha/pedido que vira "expedido" envia na hora a etiqueta
-            console.log('🐞 [Gatilho] Linha expedida → ec:', matchedItem.ec, '| cnpj:', state.activeDespachanteCnpj || '(sem cnpj)');
-            tinyEnviarEtiqueta(matchedItem);
+            const tinyEnabled = localStorage.getItem('expedicao_tiny_enabled') === '1';
+            console.log('🐞 [Gatilho] Linha expedida → ec:', matchedItem.ec, '| tinyEnabled:', tinyEnabled, '| cnpj:', state.activeDespachanteCnpj || '(sem cnpj)');
+            
+            if (matchedItem.ec && tinyEnabled) {
+                solicitarEtiquetaTiny(matchedItem.ec, state.activeDespachanteCnpj);
+            } else {
+                console.log('🐞 [Gatilho] NÃO chamará etiqueta →', matchedItem.ec ? `tinyEnabled=${tinyEnabled}` : `ec vazio (${matchedItem.ec})`);
+            }
         }
         
         // Atualiza item no IndexedDB
@@ -1691,7 +1697,6 @@ window.manualAddUnit = async function(id) {
         if (item.expedido) {
             playSoundEffect('complete');
             showToast('Item Expedido', `Concluído: ${item.descricao}`, 'success');
-tinyEnviarEtiqueta(item);
         } else {
             playSoundEffect('unit');
             showToast('Unidade Registrada', `+1 de ${item.descricao}. Restam ${item.quantidade} un.`, 'success');
@@ -2072,7 +2077,6 @@ async function confirmNoEanYes() {
         
         if (item.expedido) {
             playSoundEffect('complete');
-tinyEnviarEtiqueta(item);
             showToast('Item Expedido', `Concluído: ${item.descricao}`, 'success');
         } else {
             playSoundEffect('unit');
@@ -2349,11 +2353,6 @@ async function loadDespachantesDropdown(selectedId = null) {
     if (!elements.activeDespachanteSelect) return;
     
     elements.activeDespachanteSelect.innerHTML = '<option value="">-- Selecione uma lista de despachante --</option>';
-const allLojas = await db.getAllLojas();
-const lojasMap = {};
-allLojas.forEach(l => {
-    lojasMap[l.cnpj] = l.nome;
-});
     
     try {
         const despachantes = await db.getDespachantesAtivos();
@@ -4582,105 +4581,16 @@ document.addEventListener('DOMContentLoaded', () => {
 // -------------------------------------------------------
 let tinyPrintedOrders = new Set(); // Rastreia pedidos que já tiveram etiqueta impressa
 
-// ==========================================
-// 9.20.1. HELPER DE FETCH COM MODO SIMULAÇÃO (MOCK)
-// ==========================================
-// Quando expedicao_bipagem_mock = '1', NÃO faz chamada de rede ao endpoint real.
-// Retorna uma resposta simulada para testar o fluxo completo da bipagem
-// (gatilho → processamento → etiqueta/toast) sem consultar a API.
-async function bipagerFetch(payload) {
-    const mockMode = localStorage.getItem('expedicao_bipagem_mock') === '1';
-
-    if (mockMode) {
-        // === MODO SIMULAÇÃO — nenhuma chamada de rede ===
-        const pedidos = payload.pedidos || [];
-        console.log('🧪 [MOCK] Simulando POST para api.php?action=bipagem_expedicao');
-        console.log('🧪 [MOCK] Payload (sem token):', { pedidos, cnpj: payload.cnpj || '' });
-
-        // Escolhe o cenário conforme a flag do mock
-        const cenario = (localStorage.getItem('expedicao_bipagem_mock_cenario') || 'success');
-
-        const pedidosResult = pedidos.map(num => ({ numero: num, status: 'expedido' }));
-        // Gera URLs do tipo blob: (navegador permite window.open/imprimir, ao contrário de data:)
-        const etiquetasMock = pedidos.map(num => {
-            const html = `<html><body style="font-family:Arial;padding:20px;"><h3>🧪 ETIQUETA MOCK ${num}</h3>` +
-                `<p>Simulação — pedido ${num} (CNPJ ${payload.cnpj || '—'})</p><p>Imprimir via Ctrl+P</p></body></html>`;
-            const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-            return URL.createObjectURL(blob);
-        });
-
-        let body = {
-            agrupamentos: [{ id: 9000001 + pedidos[0], cnpj: (payload.cnpj || '').replace(/\D/g, ''), pedidos }],
-            etiquetas: etiquetasMock,
-            pedidos: pedidosResult
-        };
-
-        // Cenários alternativos de erro (para testar os toasts de aviso)
-        if (cenario === 'sem_etiqueta') {
-            body = {
-                agrupamentos: [],
-                etiquetas: [],
-                pedidos: pedidos.map(num => ({
-                    numero: num,
-                    status: 'expedido_sem_etiqueta',
-                    detalhe: 'Falha simulada ao buscar etiqueta no Tiny'
-                }))
-            };
-        } else if (cenario === 'nao_encontrado') {
-            body = {
-                agrupamentos: [],
-                etiquetas: [],
-                pedidos: pedidos.map(num => ({ numero: num, status: 'nao_encontrado', detalhe: 'Pedido não localizado no Tiny' }))
-            };
-        }
-
-        // Devolve um Response simulado (compatível com .text()/.ok/.status)
-        return new Response(JSON.stringify(body), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-        });
-    }
-
-    // === MODO REAL — chama o proxy api.php (server-side, sem CORS) ===
-    return fetch('api.php?action=bipagem_expedicao', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
-}
-
-// ==========================================
-// 9.20.2. HELPER CENTRAL: dispara a expedição/etiqueta no Tiny
-// Chamado em TODOS os caminhos em que um item é concluído:
-//   1) Leitor de código de barras (processBarcodeRead)
-//   2) Conferência Manual (+/-)
-//   3) Conferência Sem EAN
-// ==========================================
-function tinyEnviarEtiqueta(item) {
-    if (!item || !item.ec) {
-        console.log('🐞 [Tiny] tinyEnviarEtiqueta ignorado → item sem ec (item.ec =', item && item.ec, ')');
-        return;
-    }
-    const tinyEnabled = localStorage.getItem('expedicao_tiny_enabled') === '1';
-    const mockMode = localStorage.getItem('expedicao_bipagem_mock') === '1';
-    const podeChamar = mockMode || tinyEnabled;
-    console.log('🐞 [Tiny] tinyEnviarEtiqueta → ec:', item.ec, '| tinyEnabled:', tinyEnabled, '| mock:', mockMode, '| podeChamar:', podeChamar);
-    if (podeChamar) {
-        solicitarEtiquetaTiny(item.ec, state.activeDespachanteCnpj);
-    }
-}
-
 async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
+    const endpoint = localStorage.getItem('expedicao_tiny_endpoint') || '';
     const token = localStorage.getItem('expedicao_tiny_token') || '';
-    const mockMode = localStorage.getItem('expedicao_bipagem_mock') === '1';
     
     // Log de depuração no início da função (mostra se ela está sendo chamada e o estado da config)
     console.log('🐞 [Tiny] solicitarEtiquetaTiny chamado → pedido:', numeroPedido, '| cnpj:', cnpj || '(sem cnpj)');
-    console.log('🐞 [Tiny] Config → enabled:', localStorage.getItem('expedicao_tiny_enabled'), '| token:', token ? 'definido' : 'VAZIO', '| mock:', mockMode);
+    console.log('🐞 [Tiny] Config → enabled:', localStorage.getItem('expedicao_tiny_enabled'), '| endpoint:', endpoint || '(VAZIO)', '| token:', token ? 'definido' : 'VAZIO');
     
-    // Em modo simulação (mock), não exige token configurado
-    if (!token && !mockMode) {
-        console.warn('Tiny: token não configurado no popup de settings');
+    if (!endpoint || !token) {
+        console.warn('Tiny: endpoint ou token não configurados');
         return;
     }
     
@@ -4690,25 +4600,29 @@ async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
         return;
     }
     
-    // Valida que o número do pedido é um inteiro válido
-    const pedidoNum = parseInt(numeroPedido, 10);
-    if (isNaN(pedidoNum) || pedidoNum < 1) {
-        console.warn('Tiny: número de pedido inválido:', numeroPedido);
-        showToast('Erro na Etiqueta', `Número de pedido inválido: ${numeroPedido}. Verifique a leitura do PDF.`, 'warning');
-        return;
-    }
-    
     try {
         showToast('Imprimindo Etiqueta', `Solicitando etiqueta para pedido ${numeroPedido}...`, 'success');
         
-        const payload = { 
-            pedidos: [pedidoNum], 
-            cnpj: cnpj || '',
-            token: token  // Enviado via body para o proxy server-side
-        };
+        // Payload no formato do endpoint (POST /api/bipagem/expedicao)
+        const payload = { pedidos: [parseInt(numeroPedido, 10)] };
+        if (cnpj) payload.cnpj = cnpj;
         
-        // Usa o helper (suporta modo simulação via expedicao_bipagem_mock)
-        const response = await bipagerFetch(payload);
+        // Log de depuração: mostra o POST que está sendo enviado à API
+        console.log('🐞 [Tiny] Enviando POST para', endpoint);
+        console.log('🐞 [Tiny] Headers:', {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        });
+        console.log('🐞 [Tiny] Body:', JSON.stringify(payload));
+        
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+        });
         
         // Lê a resposta (JSON) mesmo quando o status for de erro, para extrair status/detalhe por pedido
         let data = null;
@@ -4726,10 +4640,6 @@ async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
             if (data && Array.isArray(data.pedidos) && data.pedidos.length) {
                 const p = data.pedidos[0];
                 throw new Error(`${p.status}${p.detalhe ? ' — ' + p.detalhe : ''}`);
-            }
-            // data.issues típico de validação de body (400)
-            if (data && Array.isArray(data.issues) && data.issues.length) {
-                throw new Error(`Body inválido: ${data.issues.join('; ')}`);
             }
             throw new Error((data && data.message) ? data.message : `Erro HTTP: ${response.status}`);
         }
@@ -4757,130 +4667,6 @@ async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
     } catch (error) {
         console.error('🐞 [Tiny] ❌ FALHA ao obter etiqueta:', error.message);
         showToast('Erro na Etiqueta', `Não foi possível gerar a etiqueta: ${error.message}`, 'error');
-        }
-}
-
-// ==========================================
-// 10. INTEGRAÇÃO BIPAGEM SELLINFO TURBO
-// ==========================================
-// Função para processar expedição em lote via API SellInfoTurbo
-async function bipagerExpedicao(pedidos, cnpj) {
-    const token = localStorage.getItem('expedicao_tiny_token') || '';
-    const mockMode = localStorage.getItem('expedicao_bipagem_mock') === '1';
-
-    if (!token && !mockMode) {
-        showToast('Configuração Incompleta', 'Token Tiny não configurado no popup de settings.', 'error');
-        return null;
-    }
-
-    showToast('Enviando Expedição', `Processando ${pedidos.length} pedido(ns)...`, 'success');
-
-    try {
-                const payload = { 
-            pedidos: pedidos.map(p => parseInt(p, 10)), 
-            cnpj: cnpj || '',
-            token: token
-        };
-
-        const response = await bipagerFetch(payload);
-
-        const data = await response.json();
-        console.log('🐞 [Bipagem] Resposta da API:', data);
-        console.log('🐞 [Bipagem] Status HTTP:', response.status);
-
-        if (!response.ok) {
-            if (response.status === 400) {
-                let msg = 'Erro no request';
-                if (data && data.issues) msg = data.issues.join(', ');
-                throw new Error(msg);
-            } else if (response.status === 401) {
-                throw new Error('Chave inválida. Configure no popup de settings.');
-            } else if (response.status === 503) {
-                throw new Error('Endpoint Tiny desabilitado.');
-            }
-            throw new Error(data && data.message ? data.message : `Erro ${response.status}`);
-        }
-
-        const resultados = data?.pedidos || [];
-        const etiquetas = data?.etiquetas || [];
-
-        // Agrupar por status
-        const expedidos = [];
-        const semEtiqueta = [];
-        const naoEncontrados = [];
-        const ambiguos = [];
-        const errosTiny = [];
-        const empresasDesconectadas = [];
-
-        resultados.forEach((p, idx) => {
-            switch (p.status) {
-                case 'expedido':
-                case 'ja_expedido':
-                    expedidos.push({ numero: pedidos[idx], indice: idx });
-                    break;
-                case 'expedido_sem_etiqueta':
-                    semEtiqueta.push({ numero: pedidos[idx], detalhe: p.detalhe });
-                    break;
-                case 'nao_encontrado':
-                    naoEncontrados.push({ numero: pedidos[idx], detalhe: p.detalhe });
-                    break;
-                case 'ambiguo':
-                    ambiguos.push({ numero: pedidos[idx], detalhe: p.detalhe });
-                    break;
-                case 'erro_tiny':
-                    errosTiny.push({ numero: pedidos[idx], detalhe: p.detalhe });
-                    break;
-                case 'empresa_desconectada':
-                    empresasDesconectadas.push({ numero: pedidos[idx], detalhe: p.detalhe });
-                    break;
-            }
-        });
-
-        // 1. Imprimir etiquetas dos expedidos
-        if (expedidos.length > 0) {
-            expedidos.forEach(item => {
-                if (etiquetas[item.indice]) window.open(etiquetas[item.indice], '_blank');
-            });
-            showToast('Etiquetas Geradas', `${expedidos.length} etiqueta(s) aberta(s)!`, 'success');
-        }
-
-        // 2. Expedidos sem etiqueta
-        if (semEtiqueta.length > 0) {
-            const detalhes = semEtiqueta.map(p => p.detalhe).join(', ');
-            showToast('Pedido Expedido', `${semEtiqueta.length} expedido(s) sem etiqueta: ${detalhes}`, 'success');
-        }
-
-        // 3. Montar relatório de erros
-        let erroMsg = '';
-        if (naoEncontrados.length > 0)
-            erroMsg += `${naoEncontrados.length} não encontrado(s) `;
-        if (ambiguos.length > 0)
-            erroMsg += `${ambiguos.length} ambíguo(s) (use CNPJ) `;
-        if (errosTiny.length > 0)
-            erroMsg += `${errosTiny.length} erro(s) Tiny `;
-        if (empresasDesconectadas.length > 0)
-            erroMsg += `${empresasDesconectadas.length} empresa(s) desconectadas `;
-
-        if (erroMsg) showToast('Atenção', erroMsg.trim(), 'warning');
-
-        if (expedidos.length + semEtiqueta.length === 0) {
-            showToast('Sem Resultado', 'Nenhum pedido expedido.', 'error');
-        }
-
-        return {
-            expeditos: expedidos.length,
-            sem_etiqueta: semEtiqueta.length,
-            total: pedidos.length,
-            nao_encontrado: naoEncontrados,
-            ambiguo: ambiguos,
-            erro_tiny: errosTiny,
-            empresa_desconectada: empresasDesconectadas
-        };
-
-    } catch (error) {
-        console.error('🐞 [Bipagem] Erro crítico:', error);
-        showToast('Erro na Expedição', error.message, 'error');
-        return null;
     }
 }
 
@@ -5035,58 +4821,55 @@ function initSettingsPopup() {
         });
     }
     
-            // Configurações Tiny - Impressão de Etiquetas (Bipagem)
+    // Configurações Tiny - Impressão de Etiquetas
     const popupTinyEnabled = document.getElementById('popup-config-tiny-enabled');
+    const popupTinyEndpoint = document.getElementById('popup-tiny-endpoint');
     const popupTinyToken = document.getElementById('popup-tiny-token');
     const popupTinySection = document.getElementById('popup-config-tiny-section');
     
-    if (popupTinyEnabled && popupTinyToken) {
+    if (popupTinyEnabled && popupTinyEndpoint && popupTinyToken) {
         // Carregar configurações salvas
         const tinyEnabled = localStorage.getItem('expedicao_tiny_enabled') === '1';
+        const tinyEndpoint = localStorage.getItem('expedicao_tiny_endpoint') || '';
         const tinyToken = localStorage.getItem('expedicao_tiny_token') || '';
         
-        console.log('🐞 [Config] Carregando Tiny → enabled:', tinyEnabled, '| token:', tinyToken ? 'definido' : 'VAZIO');
+        console.log('🐞 [Config] Carregando Tiny do localStorage → enabled:', tinyEnabled, '| endpoint:', tinyEndpoint || '(vazio)', '| token:', tinyToken ? 'definido' : 'VAZIO');
         
         popupTinyEnabled.checked = tinyEnabled;
+        popupTinyEndpoint.value = tinyEndpoint;
         popupTinyToken.value = tinyToken;
         
         if (popupTinySection) {
             popupTinySection.style.display = tinyEnabled ? 'block' : 'none';
         }
         
+        // Função que salva e registra no console
         const saveTinyConfig = () => {
             const enabled = popupTinyEnabled.checked;
+            const endpoint = popupTinyEndpoint.value.trim();
             const token = popupTinyToken.value.trim();
             localStorage.setItem('expedicao_tiny_enabled', enabled ? '1' : '0');
+            localStorage.setItem('expedicao_tiny_endpoint', endpoint);
             localStorage.setItem('expedicao_tiny_token', token);
-            console.log('🐞 [Config] Salvando Tiny → enabled:', enabled ? '1' : '0', '| token:', token ? 'definido' : 'VAZIO');
+            console.log('🐞 [Config] Salvando Tiny no localStorage → enabled:', enabled ? '1' : '0', '| endpoint:', endpoint, '| token:', token ? 'definido' : 'VAZIO');
             
             if (popupTinySection) {
                 popupTinySection.style.display = enabled ? 'block' : 'none';
             }
         };
         
-                popupTinyEnabled.addEventListener('change', saveTinyConfig);
+        // Toggle para mostrar/esconder seção
+        popupTinyEnabled.addEventListener('change', saveTinyConfig);
+        
+        // Salvar endpoint (input + change + blur para garantir)
+        popupTinyEndpoint.addEventListener('input', saveTinyConfig);
+        popupTinyEndpoint.addEventListener('change', saveTinyConfig);
+        popupTinyEndpoint.addEventListener('blur', saveTinyConfig);
         
         // Salvar token
         popupTinyToken.addEventListener('input', saveTinyConfig);
         popupTinyToken.addEventListener('change', saveTinyConfig);
         popupTinyToken.addEventListener('blur', saveTinyConfig);
-    }
-
-    // Modo Simulação (TESTE) — não chama o endpoint real
-    const popupBipagemMock = document.getElementById('popup-config-bipagem-mock');
-    if (popupBipagemMock) {
-        const mockSalvo = localStorage.getItem('expedicao_bipagem_mock') === '1';
-        popupBipagemMock.checked = mockSalvo;
-
-        popupBipagemMock.addEventListener('change', () => {
-            localStorage.setItem('expedicao_bipagem_mock', popupBipagemMock.checked ? '1' : '0');
-            showToast(popupBipagemMock.checked ? 'Modo Simulação ATIVADO' : 'Modo Real ATIVADO',
-                popupBipagemMock.checked ?
-                'As etiquetas serão simuladas. Nenhuma chamada ao endpoint real será feita.'
-                : 'O app voltará a chamar o endpoint real via api.php.', 'success');
-        });
     }
     
     // ===== Cadastro de Lojas (Empresas para etiquetas) =====

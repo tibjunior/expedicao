@@ -42,6 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Token definido aqui (em produção, ler de config fora da pasta pública)
 // Para gerar um token seguro: php -r "echo bin2hex(random_bytes(32));"
 define('API_TOKEN', 'expedicao_api_token_2026_seguro_aqui');
+define('BIPAGEM_API_KEY', getenv('BIPAGEM_API_KEY') ?: 'bipagem_key_producao_kn8x_aqui');
 
 function authenticateRequest() {
     $headers = getallheaders();
@@ -94,6 +95,7 @@ try {
         nome TEXT NOT NULL,
         data_criacao TEXT NOT NULL,
         data_limite TEXT,
+        cnpj TEXT DEFAULT '',
         concluido INTEGER DEFAULT 0
     )");
     
@@ -124,10 +126,31 @@ try {
         acao TEXT,
         tipo TEXT
     )");
+    
+    $db->exec("CREATE TABLE IF NOT EXISTS lojas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        cnpj TEXT NOT NULL
+    )");
 } catch (PDOException $e) {
     http_response_code(500);
     echo json_encode(["status" => "error", "message" => "Erro ao criar tabelas."]);
     exit();
+}
+
+// Migração: adiciona a coluna cnpj em despachantes caso o banco já exista
+try {
+    $despachantesCols = $db->query("PRAGMA table_info(despachantes)")->fetchAll();
+    $hasCnpj = false;
+    foreach ($despachantesCols as $col) {
+        if (isset($col['name']) && $col['name'] === 'cnpj') { $hasCnpj = true; break; }
+    }
+    if (!$hasCnpj) {
+        $db->exec("ALTER TABLE despachantes ADD COLUMN cnpj TEXT DEFAULT ''");
+    }
+} catch (PDOException $e) {
+    // Em caso de falha na migração, apenas registra e segue (banco continua utilizável)
+    error_log('Falha ao migrar coluna cnpj em despachantes: ' . $e->getMessage());
 }
 
 // ==========================================
@@ -222,6 +245,17 @@ switch ($action) {
         }
         break;
 
+    case 'get_all_lojas':
+        try {
+            $stmt = $db->prepare("SELECT * FROM lojas ORDER BY nome ASC");
+            $stmt->execute();
+            echo json_encode($stmt->fetchAll());
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao buscar lojas."]);
+        }
+        break;
+
     // --- ROTAS DE ESCRITA (POST - exigem autenticação) ---
     case 'add_despachante':
         authenticateRequest();
@@ -235,6 +269,7 @@ switch ($action) {
             
             $nome = isset($input['nome']) ? sanitize(trim($input['nome'])) : '';
             $data_limite = isset($input['data_limite']) ? sanitize(trim($input['data_limite'])) : '';
+            $cnpj = isset($input['cnpj']) ? sanitize(trim($input['cnpj'])) : '';
             
             if (empty($nome)) {
                 http_response_code(400);
@@ -242,16 +277,142 @@ switch ($action) {
                 break;
             }
             
-            $stmt = $db->prepare("INSERT INTO despachantes (nome, data_criacao, data_limite, concluido) VALUES (:nome, :data_criacao, :data_limite, 0)");
+            $cnpj = isset($input['cnpj']) ? sanitize(trim($input['cnpj'])) : '';
+            
+            $stmt = $db->prepare("INSERT INTO despachantes (nome, data_criacao, data_limite, cnpj, concluido) VALUES (:nome, :data_criacao, :data_limite, :cnpj, 0)");
             $stmt->execute([
                 ':nome' => $nome,
                 ':data_criacao' => date('c'),
-                ':data_limite' => $data_limite
+                ':data_limite' => $data_limite,
+                ':cnpj' => $cnpj
             ]);
             echo json_encode(["status" => "success", "id" => $db->lastInsertId()]);
         } catch (PDOException $e) {
             http_response_code(500);
             echo json_encode(["status" => "error", "message" => "Erro ao adicionar despachante."]);
+        }
+        break;
+
+        case 'bipagem_expedicao':
+        // Este endpoint é público para o frontend (device confiável)
+        // Recebe o token do localStorage via body e encaminha para a API Tiny
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            if (!$input) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "JSON inválido."]);
+                break;
+            }
+            
+            $pedidos = isset($input['pedidos']) ? array_map('intval', $input['pedidos']) : [];
+            $cnpj = isset($input['cnpj']) ? sanitize(trim($input['cnpj'])) : '';
+            // Token recebido do frontend (vem do localStorage do device confiável)
+            $bearerToken = isset($input['token']) ? sanitize(trim($input['token'])) : BIPAGEM_API_KEY;
+            
+            // Validação básica
+            if (empty($pedidos)) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Nenhum pedido informado."]);
+                break;
+            }
+            
+            if (count($pedidos) > 50) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Máximo de 50 pedidos por chamada."]);
+                break;
+            }
+            
+            if (!$bearerToken) {
+                http_response_code(401);
+                echo json_encode(["status" => "error", "message" => "Token de autenticação não informado."]);
+                break;
+            }
+            
+            // Prepara o payload para a API Tiny (sem o token)
+            // Só inclui 'cnpj' quando houver valor — a API rejeita string vazia
+            $payload = [
+                'pedidos' => $pedidos
+            ];
+            if (!empty($cnpj)) {
+                $payload['cnpj'] = $cnpj;
+            }
+            
+            // Chama a API Tiny via CURL (server-side, evita problemas de CORS)
+            $ch = curl_init('https://dashvturbo.kn8x.com.br/api/bipagem/expedicao');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $bearerToken
+            ]);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            // Encaminha o código HTTP da API Tiny para o frontend
+            http_response_code($httpCode);
+            
+            if ($response === false) {
+                echo json_encode(["status" => "error", "message" => "Erro ao comunicar com a API Tiny."]);
+                break;
+            }
+            
+            // Retorna a resposta exatamente como a API Tiny devolveu
+            // Isso inclui os status por pedido e as etiquetas
+            echo $response;
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro interno no servidor."]);
+        }
+        break;
+
+    case 'add_loja':
+        authenticateRequest();
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            if (!$input) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "JSON inválido."]);
+                break;
+            }
+            
+            $nome = isset($input['nome']) ? sanitize(trim($input['nome'])) : '';
+            $cnpj = isset($input['cnpj']) ? sanitize(trim($input['cnpj'])) : '';
+            
+            if (empty($nome) || empty($cnpj)) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Nome e CNPJ da loja são obrigatórios."]);
+                break;
+            }
+            
+            $stmt = $db->prepare("INSERT INTO lojas (nome, cnpj) VALUES (:nome, :cnpj)");
+            $stmt->execute([':nome' => $nome, ':cnpj' => $cnpj]);
+            echo json_encode(["status" => "success", "id" => $db->lastInsertId()]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao adicionar loja."]);
+        }
+        break;
+
+    case 'delete_loja':
+        authenticateRequest();
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $id = isset($input['id']) ? intval($input['id']) : 0;
+            
+            if ($id <= 0) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "Id da loja inválido."]);
+                break;
+            }
+            
+            $stmt = $db->prepare("DELETE FROM lojas WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+            echo json_encode(["status" => "success"]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao deletar loja."]);
         }
         break;
 

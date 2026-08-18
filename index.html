@@ -39,7 +39,7 @@
                 <!-- Menu Popup de Configurações -->
                 <div class="settings-popup" id="settings-popup" style="display:none;">
                     <div class="settings-popup-header">
-                        <span class="settings-popup-title">Configurações</span>
+                        <span class="settings-popup-title">Configurações <span id="app-version-badge" style="font-size:10px; color:var(--text-muted); margin-left:6px; font-weight:400;"></span></span>
                         <button class="settings-popup-close" id="btn-close-settings">✕</button>
                     </div>
                     <div class="settings-popup-body">
@@ -104,19 +104,39 @@
                             <span class="toggle-label">🟢 Flash verde na leitura</span>
                         </label>
                         
-                        <!-- Integração Tiny - Impressão de Etiquetas -->
-                        <div class="settings-section-title">🖨️ Tiny ERP — Etiquetas</div>
+                                                <!-- Integração Tiny - Impressão de Etiquetas -->
+                        <div class="settings-section-title">🖨️ Tiny ERP — Etiquetas (Bipagem)</div>
                         <label class="config-toggle">
                             <input type="checkbox" id="popup-config-tiny-enabled">
                             <span class="toggle-slider"></span>
                             <span class="toggle-label">Impressão Automática de Etiquetas</span>
                         </label>
                         <div class="config-tiny-section" id="popup-config-tiny-section" style="display:none; margin: 8px 0 0 0;">
-                            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Endpoint da API Tiny</label>
-                            <input type="text" id="popup-tiny-endpoint" class="input-despachante" placeholder="https://api.tiny.com.br/api2/gerar_etiqueta.php" style="font-size: 12px; margin-bottom: 8px;">
-                            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">API Token</label>
-                            <input type="password" id="popup-tiny-token" class="input-despachante" placeholder="Token de acesso da API Tiny" style="font-size: 12px;">
+                            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Chave da Automação (BIPAGEM_API_KEY)</label>
+                            <input type="password" id="popup-tiny-token" class="input-despachante" placeholder="Chave fixa da automação (BIPAGEM_API_KEY)" style="font-size: 12px;">
+                            <div style="font-size: 10px; color: var(--text-secondary); margin-top: 4px;">Via proxy api.php (sem CORS). A chave fica no localStorage do device.</div>
+
+                            <!-- Modo Simulação (TESTE) -->
+                            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border-color);">
+                                <label class="config-toggle" style="font-size: 11px;">
+                                    <input type="checkbox" id="popup-config-bipagem-mock">
+                                    <span class="toggle-slider"></span>
+                                    <span class="toggle-label">🧪 Modo Simulação (teste sem API)</span>
+                                </label>
+                                <label style="font-size: 10px; color: var(--text-secondary); margin-top: 4px; display: block;">Não chama o endpoint real — simula a resposta para testar o fluxo.</label>
+                            </div>
                         </div>
+                        
+                        <!-- Cadastro de Lojas (Empresas) -->
+                        <div class="settings-section-title" style="margin-top: 18px;">🏢 Lojas</div>
+                        <div style="margin: 8px 0 0 0;">
+                            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Nome da Loja</label>
+                            <input type="text" id="popup-loja-nome" class="input-despachante" placeholder="Ex: Loja Centro" style="font-size: 12px; margin-bottom: 8px;">
+                            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">CNPJ</label>
+                            <input type="text" id="popup-loja-cnpj" class="input-despachante" placeholder="Ex: 00.000.000/0001-00" style="font-size: 12px; margin-bottom: 8px;">
+                            <button class="btn btn-primary" id="btn-add-loja" style="width: 100%; padding: 8px; font-size: 12px;">+ Adicionar Loja</button>
+                        </div>
+                        <div id="lojas-list" style="margin-top: 10px;"></div>
                     </div>
                 </div>
             </div>
@@ -189,7 +209,7 @@
                                 <button id="btn-undo" class="btn btn-outline" style="flex: 1; padding: 10px 6px; font-size: 12.5px; margin: 0; white-space: nowrap;" disabled title="Desfazer última ação (Ctrl+Z)">
                                     ↩️ Desfazer
                                 </button>
-                                <button id="btn-reset" class="btn btn-danger-outline" style="flex: 1; padding: 10px 6px; font-size: 12.5px; margin: 0; white-space: nowrap;">
+                                                                                                                                                                                                                                <button id="btn-reset" class="btn btn-danger-outline" style="flex: 1; padding: 10px 6px; font-size: 12.5px; margin: 0; white-space: nowrap;">
                                     🗑 Excluir Lista
                                 </button>
                             </div>
@@ -277,6 +297,13 @@
                             <div class="form-group-despachante" style="margin-top: 12px;">
                                 <label for="despachante-deadline-input">⏱️ Horário Limite de Expedição:</label>
                                 <input type="datetime-local" id="despachante-deadline-input" class="input-despachante">
+                            </div>
+
+                            <div class="form-group-despachante" style="margin-top: 12px;">
+                                <label for="import-loja-select">🏢 Loja que emitiu este PDF:</label>
+                                <select id="import-loja-select" class="input-despachante" style="padding: 10px 12px;">
+                                    <option value="">-- Cadastre uma loja nas Configurações ⚙️ --</option>
+                                </select>
                             </div>
 
                             <div class="drag-drop-area disabled-card" id="drop-area" style="opacity: 0.5; pointer-events: none; margin-top: 16px;">
@@ -486,7 +513,7 @@
     </div>
 
     <!-- Scripts da aplicação -->
-    <script src="pdf-parser.js?v=2"></script>
-    <script src="app.js?v=2"></script>
+    <script src="pdf-parser.js?v=8"></script>
+    <script src="app.js?v=8"></script>
 </body>
 </html>
