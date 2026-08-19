@@ -4683,26 +4683,28 @@ async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
         console.warn('Tiny: token não configurado no popup de settings');
         return;
     }
-    
+
+    // Normaliza o identificador do pedido no e-commerce (Nº EC do PDF —
+    // Mercado Livre, Shopee, Magalu, Amazon, TikTok Shop... nunca o número
+    // interno do Tiny, que o expedicao não tem como conhecer).
+    const pedidoId = normalizarIdentificadorPedido(numeroPedido);
+    if (!pedidoId) {
+        console.warn('Tiny: pedido sem identificador de e-commerce (Nº EC ausente no PDF):', numeroPedido);
+        showToast('Erro na Etiqueta', `Pedido sem número de e-commerce identificável. Verifique a leitura do PDF.`, 'warning');
+        return;
+    }
+
     // Verifica se já foi impressa (deduplicação)
-    if (tinyPrintedOrders.has(numeroPedido)) {
-        console.log(`Tiny: etiqueta já solicitada para ${numeroPedido}`);
+    if (tinyPrintedOrders.has(pedidoId)) {
+        console.log(`Tiny: etiqueta já solicitada para ${pedidoId}`);
         return;
     }
-    
-    // Valida que o número do pedido é um inteiro válido
-    const pedidoNum = parseInt(numeroPedido, 10);
-    if (isNaN(pedidoNum) || pedidoNum < 1) {
-        console.warn('Tiny: número de pedido inválido:', numeroPedido);
-        showToast('Erro na Etiqueta', `Número de pedido inválido: ${numeroPedido}. Verifique a leitura do PDF.`, 'warning');
-        return;
-    }
-    
+
     try {
-        showToast('Imprimindo Etiqueta', `Solicitando etiqueta para pedido ${numeroPedido}...`, 'success');
-        
-        const payload = { 
-            pedidos: [pedidoNum], 
+        showToast('Imprimindo Etiqueta', `Solicitando etiqueta para pedido ${pedidoId}...`, 'success');
+
+        const payload = {
+            pedidos: [pedidoId],
             cnpj: cnpj || '',
             token: token  // Enviado via body para o proxy server-side
         };
@@ -4741,14 +4743,14 @@ async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
             etiquetas.forEach(url => {
                 if (url) window.open(url, '_blank');
             });
-            tinyPrintedOrders.add(numeroPedido);
-            showToast('Etiqueta Gerada', `Etiqueta do pedido ${numeroPedido} aberta para impressão!`, 'success');
+            tinyPrintedOrders.add(pedidoId);
+            showToast('Etiqueta Gerada', `Etiqueta do pedido ${pedidoId} aberta para impressão!`, 'success');
         } else if (data && Array.isArray(data.pedidos) && data.pedidos.length) {
             const p = data.pedidos[0];
             // Pedido expedido, mas a etiqueta não pôde ser retornada
-            tinyPrintedOrders.add(numeroPedido);
+            tinyPrintedOrders.add(pedidoId);
             const motivo = p && p.detalhe ? `: ${p.detalhe}` : '';
-            showToast('Pedido Expedido', `Pedido ${numeroPedido} expedido${motivo}.`, p && p.status === 'expedido' ? 'success' : 'error');
+            showToast('Pedido Expedido', `Pedido ${pedidoId} expedido${motivo}.`, p && p.status === 'expedido' ? 'success' : 'error');
             console.warn('🐞 [Tiny] ⚠️ Pedido expedido SEM etiqueta. status:', p && p.status, '| detalhe:', p && p.detalhe);
         } else {
             throw new Error('Nenhuma etiqueta retornada pela API');
