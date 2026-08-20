@@ -92,6 +92,13 @@ pedidos e emitir etiquetas no Tiny ERP automaticamente.
   - REMOVIDO (2026-08-19): "qualquer mudança na lógica de negócio da
     bipagem" do fora-de-escopo — motivo: é exatamente essa lógica que
     estava com a causa raiz do defeito.
+  - ADICIONADO (2026-08-19, achado em revisão adversarial na fase
+    validar): `api.php?action=bipagem_expedicao` nunca chamava
+    `authenticateRequest()` — qualquer requisição anônima sem `token` no
+    body disparava expedição real usando `BIPAGEM_API_KEY` do servidor
+    assim que ela fosse configurada em produção. Humano decidiu corrigir
+    nesta mesma demanda: endpoint agora exige `Authorization: Bearer
+    <API_TOKEN>` (mesmo token dos demais endpoints de escrita).
 - **e2e**: pulado-pelo-humano (2026-08-19 — sem PHP/SellInfoTurbo local
   disponível para testar a chamada real ponta a ponta; humano optou por ir
   direto ao roteiro de validação com revisão de código)

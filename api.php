@@ -317,8 +317,14 @@ switch ($action) {
         break;
 
         case 'bipagem_expedicao':
-        // Este endpoint é público para o frontend (device confiável)
-        // Recebe o token do localStorage via body e encaminha para a API Tiny
+        // Exige o mesmo API_TOKEN dos demais endpoints de escrita (header
+        // Authorization) — sem isso, qualquer requisição anônima que
+        // descobrisse a URL disparava expedição real assim que
+        // BIPAGEM_API_KEY estivesse configurada no servidor (o campo
+        // 'token' do body abaixo é OUTRO token, específico da bipagem —
+        // não substitui esta autenticação).
+        authenticateRequest();
+        // Recebe o token de bipagem do localStorage via body e encaminha para a API Tiny
         try {
             $input = json_decode(file_get_contents('php://input'), true);
             if (!$input) {

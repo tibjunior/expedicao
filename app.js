@@ -4642,9 +4642,15 @@ async function bipagerFetch(payload) {
     }
 
     // === MODO REAL — chama o proxy api.php (server-side, sem CORS) ===
+    // Autenticado com o mesmo API_TOKEN dos demais endpoints de escrita
+    // (db.apiPost) — sem isso, qualquer requisição anônima que descobrisse
+    // a URL disparava expedição real usando o BIPAGEM_API_KEY do servidor.
     return fetch('api.php?action=bipagem_expedicao', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer expedicao_api_token_2026_seguro_aqui'
+        },
         body: JSON.stringify(payload)
     });
 }

@@ -412,6 +412,7 @@ solicitarEtiquetaTiny(item.ec, cnpjDaLoja)
     ↓ normalizarIdentificadorPedido(item.ec)  [bipagem-utils.js]
     ↓ (dedup via tinyPrintedOrders)
 bipagerFetch() → POST api.php?action=bipagem_expedicao  (proxy, evita CORS)
+    Authorization: Bearer <API_TOKEN>  ← exige autenticação (ver nota abaixo)
     ↓ (server-side, cURL)
 POST https://dashvturbo.kn8x.com.br/api/bipagem/expedicao
     Authorization: Bearer <token do localStorage ou BIPAGEM_API_KEY do servidor>
@@ -441,6 +442,18 @@ número interno do Tiny. Formato varia por canal (exemplos reais de
 Por isso o app **nunca** converte esse valor para inteiro — sempre manda
 como string (`normalizarIdentificadorPedido`), e o SellInfoTurbo resolve
 pelo campo `numeroPedidoEcommerce` (não pelo número interno do Tiny).
+
+### Autenticação do proxy — dois tokens diferentes, não confundir
+
+`api.php?action=bipagem_expedicao` exige o header `Authorization: Bearer
+<API_TOKEN>` (o mesmo token administrativo dos outros endpoints de
+escrita, via `authenticateRequest()`) — sem isso, 401 antes de qualquer
+outra coisa. Isso é **diferente** do campo `token` no body da chamada, que
+é a `BIPAGEM_API_KEY` do operador (ou o fallback do servidor). Até
+2026-08-19 esse endpoint não exigia `API_TOKEN` nenhum — qualquer
+requisição anônima que descobrisse a URL conseguia disparar expedição
+real assim que `BIPAGEM_API_KEY` estivesse configurada no servidor
+(achado em revisão adversarial, corrigido na mesma demanda).
 
 ### Configuração necessária (popup ⚙️ de configurações)
 
