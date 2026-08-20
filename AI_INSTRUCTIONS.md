@@ -464,10 +464,21 @@ mensagem própria no toast: `sem_nota_fiscal`, `nota_fiscal_cancelada`,
 escrita, via `authenticateRequest()`) — sem isso, 401 antes de qualquer
 outra coisa. Isso é **diferente** do campo `token` no body da chamada, que
 é a `BIPAGEM_API_KEY` do operador (ou o fallback do servidor). Até
-2026-08-19 esse endpoint não exigia `API_TOKEN` nenhum — qualquer
-requisição anônima que descobrisse a URL conseguia disparar expedição
-real assim que `BIPAGEM_API_KEY` estivesse configurada no servidor
-(achado em revisão adversarial, corrigido na mesma demanda).
+2026-08-19 esse endpoint não exigia `API_TOKEN` nenhum, então qualquer
+requisição anônima conseguia disparar expedição real assim que
+`BIPAGEM_API_KEY` estivesse configurada no servidor.
+
+**Isso ainda não é uma correção completa** (achado em revisão adversarial,
+2026-08-20): `API_TOKEN` está hardcoded em texto puro no `app.js` — arquivo
+estático, servido a qualquer visitante, sem login nem gate nenhum na
+página. Qualquer um com "view-source" encontra o token e chama o endpoint
+direto, contornando essa proteção. A mudança só fecha o caso mais simples
+(bot batendo na URL sem nunca ter aberto a página); não impede alguém
+motivado a abrir o JS público. Correção de verdade exigiria um mecanismo
+de auth que não dependa de segredo embutido em JS estático (ex.: sessão de
+login, ou mover a chamada para trás de algo que o navegador não consegue
+ler). Registrado como débito técnico pendente, fora do escopo desta
+demanda.
 
 ### Configuração necessária (popup ⚙️ de configurações)
 

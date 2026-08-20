@@ -38,6 +38,7 @@ pedidos e emitir etiquetas no Tiny ERP automaticamente.
 
 - bipagem-tiny-sellinfo | em-curso | Auditar/corrigir integração de bipagem com API do SellInfoTurbo
 - bipagem-danfe-nota-fiscal | em-curso | Gerar também o link de impressão da DANFE (nota fiscal) junto com a etiqueta de envio na bipagem
+- bipagem-auth-fraca | planejada | API_TOKEN hardcoded e público no app.js — proteção do proxy de bipagem é decorativa, não real
 - core-conferencia-expedicao | entregue | Parsing de PDF, fila de conferência por bipagem, filtros/busca/log/CSV → ver GRAFO-ARQUIVO.md
 - persistencia-multi-modo | entregue | IndexedDB local / api.php+SQLite remoto / fila offline sincronizável → ver GRAFO-ARQUIVO.md
 - admin-despachantes-lojas | entregue | CRUD de despachantes e lojas via api.php → ver GRAFO-ARQUIVO.md
@@ -81,7 +82,9 @@ pedidos e emitir etiquetas no Tiny ERP automaticamente.
     (commits `71d597f`, `ab21030`). 971 testes verdes no SellInfoTurbo,
     typecheck limpo; `npm test` 7/7 no expedicao. Ver plano para detalhe.
 - **delta**:
-- **e2e**: pendente
+- **e2e**: pulado-pelo-humano (2026-08-20 — sem conexão real ao Tiny nem
+  PHP local disponível; humano optou pela evidência de testes
+  automatizados já rodada)
 - **feedback-reprovacao**:
 - **atualizado-em**: 2026-08-20
 
