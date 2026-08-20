@@ -357,10 +357,10 @@ switch ($action) {
         }
         break;
 
-        case 'bipagem_expedicao':
-        // Endpoint público — proxy para API Tiny
-        // Autenticação com Tiny é feita via token_tiny no body
-        try {
+    case 'bipagem_expedicao':
+    // Endpoint público — proxy para API Tiny
+    // Autenticação com Tiny é feita via token_tiny no body
+    try {
             $input = json_decode(file_get_contents('php://input'), true);
             if (!$input) {
                 http_response_code(400);
