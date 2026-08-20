@@ -744,6 +744,63 @@ body.light-mode .items-table tr.no-ean-row {
     color: var(--success);
 }
 
+/* ==========================================
+   9.21. ETIQUETAS TINY (aguardando / pendientes / impressão)
+   ========================================== */
+.badge-esperando {
+    background-color: rgba(250, 204, 21, 0.15);
+    color: #facc15;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.etiqueta-spinner,
+.etiqueta-spinner-inline {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(250, 204, 21, 0.3);
+    border-top-color: #facc15;
+    border-radius: 50%;
+    animation: etiqueta-spin 0.7s linear infinite;
+}
+.etiqueta-spinner-inline { width: 10px; height: 10px; }
+
+@keyframes etiqueta-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Indicador aguardando no header */
+#etiqueta-esperando-ind {
+    align-items: center;
+    gap: 6px;
+    background: rgba(250, 204, 21, 0.12);
+    border: 1px solid rgba(250, 204, 21, 0.35);
+    color: #facc15;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+/* Badge de contagem de pendentes no botão */
+.etiqueta-pendientes-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--danger, #ef4444);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+}
+
 .badge-channel {
     background-color: var(--channel-generic-bg);
     border: 1px solid var(--channel-generic-border);
@@ -974,14 +1031,17 @@ body.light-mode .sku-badge {
 /* ==========================================
    8.5. MODAL DE ERRO PERSISTENTE (TRAVA)
    ========================================== */
-#error-modal {
+#error-modal,
+#etiqueta-error-modal,
+#etiqueta-pendientes-modal,
+#etiqueta-preview-modal {
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    background-color: rgba(15, 10, 10, 0.96); /* Fundo vermelho/escuro opaco */
-    z-index: 100000; /* Acima de toda a interface, inclusive da câmera */
+    background-color: rgba(15, 10, 10, 0.96);
+    z-index: 100000;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -1057,6 +1117,28 @@ body.light-mode .sku-badge {
     0%, 100% { transform: translateX(0); }
     10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
     20%, 40%, 60%, 80% { transform: translateX(8px); }
+}
+
+/* Modais de etiquetas (pendentes e preview) — tema azul/informativo */
+#etiqueta-pendientes-modal .error-modal-card,
+#etiqueta-preview-modal .error-modal-card {
+    background: rgba(20, 25, 40, 0.95);
+    border: 2px solid #3b82f6;
+    box-shadow: 0 0 50px rgba(59, 130, 246, 0.3);
+}
+#etiqueta-pendientes-modal .error-modal-card h2,
+#etiqueta-preview-modal .error-modal-card h2 {
+    color: #3b82f6;
+}
+
+/* Modal de erro de etiqueta — mantém tema vermelho */
+#etiqueta-error-modal .error-modal-card {
+    background: rgba(30, 20, 20, 0.95);
+    border: 2px solid #ef4444;
+    box-shadow: 0 0 50px rgba(239, 68, 68, 0.4);
+}
+#etiqueta-error-modal .error-modal-card h2 {
+    color: #ef4444;
 }
 
 @keyframes pulse-icon {
