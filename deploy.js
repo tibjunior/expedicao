@@ -7,6 +7,7 @@ const ALLOWED_FILES = [
     'index.html',
     'index.css',
     'app.js',
+    'etiquetas-ui.js',
     'pdf-parser.js',
     'teste.pdf',
     'favicon.svg',
@@ -16,24 +17,55 @@ const ALLOWED_FILES = [
 ];
 
 /**
- * Lê e decodifica as credenciais do arquivo credencial.txt
+ * Lê e decodifica as credenciais do arquivo .env.ftp ou credencial.txt
  */
 function readCredentials() {
+    // Tenta ler de variáveis de ambiente primeiro
+    let host = process.env.FTP_HOST;
+    let user = process.env.FTP_USER;
+    let password = process.env.FTP_PASS;
+    let port = process.env.FTP_PORT ? parseInt(process.env.FTP_PORT, 10) : 21;
+
+    if (host && user && password) {
+        return { host, user, password, port };
+    }
+
+    // Tenta ler de arquivo .env.ftp
+    const envFtpPath = path.join(__dirname, '.env.ftp');
+    if (fs.existsSync(envFtpPath)) {
+        const content = fs.readFileSync(envFtpPath, 'utf8');
+        const lines = content.split('\n');
+        for (const line of lines) {
+            if (line.startsWith('#') || !line.includes('=')) continue;
+            const [key, ...valueParts] = line.split('=');
+            const value = valueParts.join('=').trim().replace(/^["']|["']$/g, '');
+            switch (key.trim()) {
+                case 'FTP_HOST': host = value; break;
+                case 'FTP_USER': user = value; break;
+                case 'FTP_PASS': password = value; break;
+                case 'FTP_PORT': port = parseInt(value, 10) || 21; break;
+            }
+        }
+        if (host && user && password) {
+            return { host, user, password, port };
+        }
+    }
+
+    // Fallback para credencial.txt (formato legado)
     const credPath = path.join(__dirname, 'credencial.txt');
     if (!fs.existsSync(credPath)) {
-        throw new Error('Arquivo credencial.txt não encontrado na raiz do projeto.');
+        throw new Error('Credenciais FTP não encontradas. Configure .env.ftp ou credencial.txt.');
     }
 
     const content = fs.readFileSync(credPath, 'utf8');
     
-    // Captura usando expressões regulares
     const hostMatch = content.match(/Servidor\s+FTP:\s*(\S+)/i);
     const userMatch = content.match(/Nome\s+de\s+usuário\s+do\s+FTP:\s*(\S+)/i);
     const passMatch = content.match(/Senha:\s*(\S+)/i);
     const portMatch = content.match(/porta\s+FTPS\s+explícita:\s*(\d+)/i);
 
     if (!hostMatch || !userMatch || !passMatch) {
-        throw new Error('Formato inválido no credencial.txt. Certifique-se de que contém Servidor FTP, Nome de usuário e Senha.');
+        throw new Error('Formato inválido no credencial.txt.');
     }
 
     return {

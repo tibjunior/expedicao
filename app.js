@@ -7,7 +7,7 @@
 const parser = new PdfParser();
 
 // Versão da aplicação (para diagnosticar cache)
-const APP_VERSION = '8';
+const APP_VERSION = '12';
 console.log('🐞 Versão da aplicação carregada:', 'v' + APP_VERSION);
 
 // ==========================================
@@ -73,11 +73,14 @@ class ExpedicaoDB {
     }
 
     async apiPost(action, data) {
+        const token = (typeof CONFIG !== 'undefined' && CONFIG.API_TOKEN) 
+            ? CONFIG.API_TOKEN 
+            : localStorage.getItem('expedicao_api_token') || '';
         const response = await fetch(`api.php?action=${action}`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer expedicao_api_token_2026_seguro_aqui'
+                'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify(data)
         });
@@ -268,6 +271,31 @@ class ExpedicaoDB {
         });
     }
 
+    reabrirDespachante(id) {
+        if (!this.isLocal) {
+            return this.apiPost('reabrir_despachante', { id })
+                .then(() => true);
+        }
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['despachantes'], 'readwrite');
+            const store = transaction.objectStore('despachantes');
+            const getReq = store.get(id);
+            getReq.onsuccess = () => {
+                const despachante = getReq.result;
+                if (despachante) {
+                    despachante.concluido = 0;
+                    const putReq = store.put(despachante);
+                    putReq.onsuccess = () => resolve(true);
+                    putReq.onerror = (e) => reject(e);
+                } else {
+                    resolve(false);
+                }
+            };
+            getReq.onerror = (e) => reject(e);
+        });
+    }
+
     deleteDespachante(id) {
         if (!this.isLocal) {
             return this.apiPost('delete_despachante', { id })
@@ -416,11 +444,26 @@ class ExpedicaoDB {
                     cursor.continue();
                 }
             };
-            
             transaction.oncomplete = () => resolve(true);
             transaction.onerror = (e) => reject(e);
         });
     }
+
+    async deleteLog(logId) {
+        if (!this.isLocal) {
+            return this.apiPost('delete_log', { id: logId })
+                .then(() => true);
+        }
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['logs'], 'readwrite');
+            const store = transaction.objectStore('logs');
+            const request = store.delete(logId);
+            request.onsuccess = () => resolve(true);
+            request.onerror = (e) => reject(e);
+        });
+    }
+
 
     getLogsByDespachante(despachanteId) {
         if (!this.isLocal) {
@@ -472,6 +515,7 @@ const db = new ExpedicaoDB();
 const state = {
     activeTab: 'expedicao', // 'expedicao', 'administracao'
     activeDespachanteId: null,
+    activeDespachanteNome: null,
     activeDespachanteCnpj: null,
     items: [],
     filter: 'all', // 'all', 'pending', 'completed'
@@ -486,8 +530,29 @@ const state = {
     errorModalActive: false,
     confirmModalActive: false,
     confirmTargetItem: null,
+    pendientesModalActive: false,
+    focusedItemId: null,
+    focusedItemEan: null,
+    focusedItemSku: null,
     logs: []
 };
+
+// ==========================================
+// Funções de ofuscação para tokens no localStorage
+// ==========================================
+function ofuscarToken(token) {
+    if (!token) return '';
+    return btoa(token.split('').reverse().join(''));
+}
+
+function desofuscarToken(tokenOfuscado) {
+    if (!tokenOfuscado) return '';
+    try {
+        return atob(tokenOfuscado).split('').reverse().join('');
+    } catch (e) {
+        return tokenOfuscado;
+    }
+}
 
 // Instância do Scanner de Câmera
 let html5QrcodeScanner = null;
@@ -535,6 +600,24 @@ function initElements() {
     elements.confirmProductSku = document.getElementById('confirm-product-sku');
     elements.btnConfirmNoEanYes = document.getElementById('btn-confirm-no-ean-yes');
     elements.btnConfirmNoEanNo = document.getElementById('btn-confirm-no-ean-no');
+
+    // Elementos de Etiquetas (esperando / pendientes / modales)
+    elements.etiquetaEsperandoInd = document.getElementById('etiqueta-esperando-ind');
+    elements.etiquetaEsperandoCount = document.getElementById('etiqueta-esperando-count');
+    elements.btnEtiquetaPendientes = document.getElementById('btn-etiqueta-pendientes');
+    elements.etiquetaPendientesBadge = document.getElementById('etiqueta-pendientes-badge');
+    elements.etiquetaErrorModal = document.getElementById('etiqueta-error-modal');
+    elements.etiquetaErrorDesc = document.getElementById('etiqueta-error-desc');
+    elements.etiquetaErrorEc = document.getElementById('etiqueta-error-ec');
+    elements.btnCloseEtiquetaError = document.getElementById('btn-close-etiqueta-error');
+    elements.etiquetaPendientesModal = document.getElementById('etiqueta-pendientes-modal');
+    elements.etiquetaPendientesLista = document.getElementById('etiqueta-pendientes-lista');
+    elements.btnReintentarTodas = document.getElementById('btn-reintentar-todas');
+    elements.btnCerrarPendientes = document.getElementById('btn-cerrar-pendientes');
+    elements.etiquetaPreviewModal = document.getElementById('etiqueta-preview-modal');
+    elements.etiquetaPreviewEcText = document.getElementById('etiqueta-preview-ec');
+    elements.etiquetaPreviewBody = document.getElementById('etiqueta-preview-body');
+    elements.etiquetaPreviewAutoPrint = document.getElementById('etiqueta-preview-auto-print');
     
     // Perfil Sonoro
     elements.soundProfileSelect = document.getElementById('sound-profile-select');
@@ -1184,15 +1267,13 @@ async function processBarcodeRead(rawSku) {
         
         matchedItem.quantidade -= unidadesParaExpedir;
         
-        // Se a quantidade restante zerou, marcar como expedido
+        // Se a quantidade restante chegó a 0, dispara el orquestador de etiquetas
+        // (no marca aún como expedido; depende de la etiqueta)
+        let resultProcesar = null;
         if (matchedItem.quantidade <= 0) {
             matchedItem.quantidade = 0;
-            matchedItem.expedido = true;
-            matchedItem.dataExpedicao = new Date().toISOString();
-            
-            // Integração Tiny: cada linha/pedido que vira "expedido" envia na hora a etiqueta
-            console.log('🐞 [Gatilho] Linha expedida → ec:', matchedItem.ec, '| cnpj:', state.activeDespachanteCnpj || '(sem cnpj)');
-            tinyEnviarEtiqueta(matchedItem);
+            console.log('🐞 [Gatilho] Línea completa → ec:', matchedItem.ec, '| cnpj:', state.activeDespachanteCnpj || '(sem cnpj)');
+            resultProcesar = await procesarPedidoCompletado(matchedItem.ec, state.activeDespachanteCnpj, matchedItem);
         }
         
         // Atualiza item no IndexedDB
@@ -1223,9 +1304,15 @@ async function processBarcodeRead(rawSku) {
             } else {
                 showToast('Item Expedido', `Concluído: ${matchedItem.descricao} (Qtd: ${unidadesParaExpedir})`, 'success');
             }
+        } else if (resultProcesar && resultProcesar.esperandoGrupo) {
+            playSoundEffect('unit');
+            showToast('Pedido Pendente de Etiqueta', `Linha registrada. Faltam outros artículos do pedido ${matchedItem.ec} para solicitar a etiqueta.`, 'warning');
+        } else if (resultProcesar && !resultProcesar.ok) {
+            playSoundEffect('error');
+            showToast('Pedido Pendente de Etiqueta', `O pedido ${matchedItem.ec} ficou pendente por problema de etiqueta. Verifique antes de fechar o PDF.`, 'warning');
         } else {
             playSoundEffect('unit');
-            showToast('Unidade Registrada', `+${unidadesParaExpedir} de ${matchedItem.descricao}. Restam ${matchedItem.quantidade} un.`, 'success');
+            showToast('Unidad Registrada', `+${unidadesParaExpedir} de ${matchedItem.descricao}. Restam ${matchedItem.quantidade} un.`, 'success');
         }
         
         // Se o item focado foi concluído no modo guiado, encerra o foco e desativa a câmera
@@ -1314,8 +1401,12 @@ function triggerInputErrorEffect() {
 
 // Verifica se toda a lista de expedição foi concluída
 async function checkAllCompleted() {
-    const totalPendentes = state.items.reduce((acc, item) => acc + item.quantidade, 0);
-    if (totalPendentes === 0 && state.items.length > 0) {
+    // Só conclui quando TODOS los itens realmente foram expedidos (com etiqueta ok),
+    // e não existam etiquetas pendentes o aguardando sendo processadas.
+    const todosExpedidos = state.items.length > 0 && state.items.every(item => item.expedido === true);
+    const hayPendientes = etiquetasPendientes && etiquetasPendientes.length > 0;
+    const hayEsperando = etiquetasEsperando && etiquetasEsperando.size > 0;
+    if (todosExpedidos && !hayPendientes && !hayEsperando) {
         const despachanteId = state.activeDespachanteId;
         const despachanteNome = state.activeDespachanteNome;
         
@@ -1356,6 +1447,19 @@ async function checkAllCompleted() {
 // ==========================================
 // 5. GERAÇÃO DE SINAL DE AUDIO (BEEP)
 // ==========================================
+// Instância global de AudioContext para reutilização
+let globalAudioCtx = null;
+
+function getAudioContext() {
+    if (!globalAudioCtx || globalAudioCtx.state === 'closed') {
+        globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (globalAudioCtx.state === 'suspended') {
+        globalAudioCtx.resume();
+    }
+    return globalAudioCtx;
+}
+
 /**
  * Gera um som analógico usando Web Audio API do navegador.
  * Evita a necessidade de carregar arquivos MP3 estáticos.
@@ -1367,7 +1471,7 @@ function playBeep(frequency, duration, type = 'sine') {
     if (!state.soundEnabled) return;
 
     try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const audioCtx = getAudioContext();
         const oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
 
@@ -1598,29 +1702,31 @@ function renderTable() {
         // Linha da tabela
         tr.innerHTML = `
             <td>
-                <span class="badge ${item.expedido ? 'badge-completed' : 'badge-pending'}">
-                    ${item.expedido ? 'Expedido' : 'Pendente'}
-                </span>
+                ${item.expedido
+                    ? `<span class="badge badge-completed">Expedido</span>`
+                    : (item.ec && etiquetasEsperando.has(String(item.ec).trim())
+                        ? `<span class="badge badge-esperando"><span class="etiqueta-spinner-inline"></span> Aguardando etiqueta</span>`
+                        : `<span class="badge badge-pending">Pendente</span>`)}
             </td>
             <td>
                 <div class="meta-cell">
-                    <span class="nota-text">${item.nota}</span>
-                    <span class="cliente-text" title="${item.cliente}">${item.cliente}</span>
+                    <span class="nota-text">${escHtml(item.nota)}</span>
+                    <span class="cliente-text" title="${escHtml(item.cliente)}">${escHtml(item.cliente)}</span>
                 </div>
             </td>
             <td>
                 <div class="product-cell">
-                    <span class="product-desc">${item.descricao}</span>
+                    <span class="product-desc">${escHtml(item.descricao)}</span>
                     <div class="product-details-extra">
-                        <span class="badge badge-channel ${canalClass}">${item.canal}</span>
-                        ${item.ec ? `<span>Pedido: ${item.ec}</span>` : ''}
+                        <span class="badge badge-channel ${canalClass}">${escHtml(item.canal)}</span>
+                        ${item.ec ? `<span>Pedido: ${escHtml(item.ec)}</span>` : ''}
                     </div>
                 </div>
             </td>
             <td>
                 <div class="sku-cell">
-                    <span class="sku-badge">${item.sku}</span>
-                    ${item.temEan ? `<span class="ean-subtext" style="display:block; font-size:10px; color:var(--text-secondary); margin-top:4px; font-family:monospace; background:rgba(255,255,255,0.05); padding:2px 4px; border-radius:4px; width:fit-content;">EAN: ${item.ean}</span>` : '<span class="ean-subtext text-danger" style="display:block; font-size:10px; color:#ef4444; margin-top:4px; font-weight:700;">Sem EAN no PDF</span>'}
+                    <span class="sku-badge">${escHtml(item.sku)}</span>
+                    ${item.temEan ? `<span class="ean-subtext" style="display:block; font-size:10px; color:var(--text-secondary); margin-top:4px; font-family:monospace; background:rgba(255,255,255,0.05); padding:2px 4px; border-radius:4px; width:fit-content;">EAN: ${escHtml(item.ean)}</span>` : '<span class="ean-subtext text-danger" style="display:block; font-size:10px; color:#ef4444; margin-top:4px; font-weight:700;">Sem EAN no PDF</span>'}
                 </div>
             </td>
             <td class="text-center">
@@ -1662,10 +1768,10 @@ window.manualAddUnit = async function(id) {
     if (item && !item.expedido) {
         // Registra a unidade expedida
         item.quantidade -= 1;
+        let resultProcesar = null;
         if (item.quantidade <= 0) {
             item.quantidade = 0;
-            item.expedido = true;
-            item.dataExpedicao = new Date().toISOString();
+            resultProcesar = await procesarPedidoCompletado(item.ec, state.activeDespachanteCnpj, item);
         }
         
         // Atualiza item no IndexedDB
@@ -1691,7 +1797,12 @@ window.manualAddUnit = async function(id) {
         if (item.expedido) {
             playSoundEffect('complete');
             showToast('Item Expedido', `Concluído: ${item.descricao}`, 'success');
-tinyEnviarEtiqueta(item);
+        } else if (resultProcesar && resultProcesar.esperandoGrupo) {
+            playSoundEffect('unit');
+            showToast('Pedido Pendente de Etiqueta', `Linha registrada. Faltam outros artículos do pedido ${item.ec} para solicitar a etiqueta.`, 'warning');
+        } else if (resultProcesar && !resultProcesar.ok) {
+            playSoundEffect('error');
+            showToast('Pedido Pendente de Etiqueta', `O pedido ${item.ec} ficou pendente por problema de etiqueta. Verifique antes de fechar o PDF.`, 'warning');
         } else {
             playSoundEffect('unit');
             showToast('Unidade Registrada', `+1 de ${item.descricao}. Restam ${item.quantidade} un.`, 'success');
@@ -1913,7 +2024,12 @@ function resetState() {
     elements.searchInput.value = '';
     
     stopCameraScanner();
-    addLog('Limpeza de Fila', '---', '---', 0, 'info');
+    db.addLog({
+        despachante_id: state.activeDespachanteId,
+        timestamp: new Date().toISOString(),
+        nota: '---', ean: '---', quantidade: 0,
+        acao: 'Limpeza de Fila', tipo: 'info'
+    });
 }
 
 /**
@@ -2044,10 +2160,10 @@ async function confirmNoEanYes() {
     if (item) {
         // Registra a unidade expedida
         item.quantidade -= 1;
+        let resultProcesar = null;
         if (item.quantidade <= 0) {
             item.quantidade = 0;
-            item.expedido = true;
-            item.dataExpedicao = new Date().toISOString();
+            resultProcesar = await procesarPedidoCompletado(item.ec, state.activeDespachanteCnpj, item);
         }
         
         // Atualiza item no IndexedDB
@@ -2072,8 +2188,13 @@ async function confirmNoEanYes() {
         
         if (item.expedido) {
             playSoundEffect('complete');
-tinyEnviarEtiqueta(item);
             showToast('Item Expedido', `Concluído: ${item.descricao}`, 'success');
+        } else if (resultProcesar && resultProcesar.esperandoGrupo) {
+            playSoundEffect('unit');
+            showToast('Pedido Pendente de Etiqueta', `Linha registrada. Faltam outros artículos do pedido ${item.ec} para solicitar a etiqueta.`, 'warning');
+        } else if (resultProcesar && !resultProcesar.ok) {
+            playSoundEffect('error');
+            showToast('Pedido Pendente de Etiqueta', `O pedido ${item.ec} ficou pendente por problema de etiqueta. Verifique antes de fechar o PDF.`, 'warning');
         } else {
             playSoundEffect('unit');
             showToast('Unidade Registrada', `+1 de ${item.descricao}. Restam ${item.quantidade} un.`, 'success');
@@ -2162,13 +2283,13 @@ function renderLogs() {
                 <span class="log-time">${formatDate} ${formatTime}</span>
             </td>
             <td>
-                <strong>${log.nota}</strong>
+                <strong>${escHtml(log.nota)}</strong>
             </td>
             <td>
-                <span class="log-badge ${badgeClass}">${log.acao}</span>
+                <span class="log-badge ${badgeClass}">${escHtml(log.acao)}</span>
             </td>
             <td>
-                <span style="font-family: monospace;">${log.ean}</span>
+                <span style="font-family: monospace;">${escHtml(log.ean)}</span>
             </td>
             <td>
                 <strong>${log.quantidade > 0 ? '+' + log.quantidade : log.quantidade}</strong>
@@ -2541,25 +2662,26 @@ async function renderDespachantesTable() {
             }
             
             // Ações dependendo do status de conclusão (concluido === 1)
+            const nomeEscapado = d.nome.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             let acoesHtml = '';
             if (d.concluido === 1) {
                 acoesHtml = `
                     <div style="display:flex; justify-content:center; gap: 6px;">
                         <button class="btn btn-outline" onclick="exportarCsvPeloPainel(${d.id})" style="padding: 4px 8px; font-size: 11px; height: auto;">CSV</button>
-                        <button class="btn btn-danger-outline" onclick="excluirDespachantePeloPainel(${d.id}, '${d.nome}')" style="padding: 4px 8px; font-size: 11px; height: auto;">Excluir</button>
+                        <button class="btn btn-danger-outline" onclick="excluirDespachantePeloPainel(${d.id}, '${nomeEscapado}')" style="padding: 4px 8px; font-size: 11px; height: auto;">Excluir</button>
                     </div>
                 `;
             } else {
                 acoesHtml = `
                     <div style="display:flex; justify-content:center; gap: 6px;">
                         <button class="btn btn-primary" onclick="selecionarParaExpedir(${d.id})" style="padding: 4px 8px; font-size: 11px; height: auto; box-shadow:none;">Expedir</button>
-                        <button class="btn btn-danger-outline" onclick="excluirDespachantePeloPainel(${d.id}, '${d.nome}')" style="padding: 4px 8px; font-size: 11px; height: auto;">Excluir</button>
+                        <button class="btn btn-danger-outline" onclick="excluirDespachantePeloPainel(${d.id}, '${nomeEscapado}')" style="padding: 4px 8px; font-size: 11px; height: auto;">Excluir</button>
                     </div>
                 `;
             }
             
             tr.innerHTML = `
-                <td style="padding: 10px 8px; font-weight: 700;">${d.nome}</td>
+                <td style="padding: 10px 8px; font-weight: 700;">${escHtml(d.nome)}</td>
                 <td style="padding: 10px 8px; text-align: center;">
                     <strong>${pecasExpedidas} / ${pecasTotais}</strong>
                     <span style="display:block; font-size:10px; color:var(--text-muted);">${totalLinhas} itens</span>
@@ -2987,8 +3109,8 @@ document.addEventListener('keydown', (e) => {
         return;
     }
     
-    // Ctrl+C - Abrir câmera
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+    // Ctrl+Shift+C - Abrir câmera (não conflita com cópia nativa)
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'c' || e.key === 'C')) {
         e.preventDefault();
         if (state.activeDespachanteId) startCameraScanner();
         return;
@@ -3109,9 +3231,7 @@ async function undoLastAction() {
             const lastLog = state.logs[0]; // logs são ordenados do mais recente para o mais antigo
             if (lastLog && lastLog.id) {
                 try {
-                    const transaction = db.db.transaction(['logs'], 'readwrite');
-                    const store = transaction.objectStore('logs');
-                    store.delete(lastLog.id);
+                    await db.deleteLog(lastLog.id);
                 } catch (e) {
                     console.warn('Não foi possível remover o log do undo:', e);
                 }
@@ -3133,23 +3253,7 @@ async function undoLastAction() {
         if (state.items.some(item => !item.expedido)) {
             const despachante = await db.getDespachante(state.activeDespachanteId);
             if (despachante && despachante.concluido === 1) {
-                await db.marcarDespachanteConcluido(state.activeDespachanteId);
-                // Na verdade precisamos reverter: marcar como não concluído
-                // Como não temos função específica, vamos manipular diretamente
-                try {
-                    const transaction = db.db.transaction(['despachantes'], 'readwrite');
-                    const store = transaction.objectStore('despachantes');
-                    const getReq = store.get(state.activeDespachanteId);
-                    getReq.onsuccess = () => {
-                        const d = getReq.result;
-                        if (d) {
-                            d.concluido = 0;
-                            store.put(d);
-                        }
-                    };
-                } catch (e) {
-                    console.warn('Erro ao reabrir despachante:', e);
-                }
+                await db.reabrirDespachante(state.activeDespachanteId);
                 elements.expedicaoActiveTimer.setAttribute('data-concluido', '0');
             }
         }
@@ -3748,6 +3852,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // -------------------------------------------------------
 let ttsEnabled = true;
 let ttsVoice = null;
+let ttsVoiceName = '';
 let ttsUtterance = null;
 let ttsSpeed = 1.0; // Velocidade da fala: 0.7 (lenta), 1.0 (normal), 1.3 (rápida)
 
@@ -3775,10 +3880,15 @@ function speakText(text) {
         speechSynthesis.cancel();
     }
     
-    // Seleciona voz em português se disponível
+    // Seleciona voz: usa a salva ou busca a primeira pt-BR
     if (!ttsVoice) {
         const voices = speechSynthesis.getVoices();
-        ttsVoice = voices.find(v => v.lang.startsWith('pt')) || voices[0];
+        if (ttsVoiceName) {
+            ttsVoice = voices.find(v => v.name === ttsVoiceName) || null;
+        }
+        if (!ttsVoice) {
+            ttsVoice = voices.find(v => v.lang.startsWith('pt')) || voices[0];
+        }
     }
     
     ttsUtterance = new SpeechSynthesisUtterance(text);
@@ -4049,7 +4159,13 @@ class BackupManager {
     
     hasBackup() {
         const data = localStorage.getItem(this.backupKey);
-        return data && JSON.parse(data).items && JSON.parse(data).items.length > 0;
+        if (!data) return false;
+        try {
+            const parsed = JSON.parse(data);
+            return parsed && parsed.items && parsed.items.length > 0;
+        } catch (e) {
+            return false;
+        }
     }
     
     getBackupInfo() {
@@ -4581,6 +4697,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // 9.20. INTEGRAÇÃO TINY — IMPRESSÃO DE ETIQUETAS
 // -------------------------------------------------------
 let tinyPrintedOrders = new Set(); // Rastreia pedidos que já tiveram etiqueta impressa
+let tinyInFlight = new Set(); // Rastreia pedidos que estão AGORA sendo processados (evita duplicatas concorrentes → 422)
 
 // ==========================================
 // 9.20.1. HELPER DE FETCH COM MODO SIMULAÇÃO (MOCK)
@@ -4669,9 +4786,306 @@ function tinyEnviarEtiqueta(item) {
         solicitarEtiquetaTiny(item.ec, state.activeDespachanteCnpj);
     }
 }
+// -------------------------------------------------------
+// 9.20.3. EXTRAÇÃO TOLERANTE DE ETIQUETAS/PDF DA RESPOSTA
+// -------------------------------------------------------
+// O endpoint de bipagem pode devolver a etiqueta em várias formas:
+//   - data.etiquetas = [ "https://...", "data:application/pdf;base64,..." ] (string URL)
+//   - data.etiquetas = [ { url|link|pdf|href: "..." } ] (objetos)
+//   - anidada dentro de data.agrupamentos[*] (campos tipo url/link/pdf/etiqueta)
+// Esta função varre o JSON recursivamente e devuelve TODOS los strings que
+// parecen URLs de etiquetas/PDF (http(s):// ou data:application/pdf).
+function extraerEtiquetasRespuesta(data) {
+    const salidas = [];
 
+    if (!data || typeof data !== 'object') return salidas;
+
+    // 1) data.etiquetas explícito (string ou objeto com url)
+    const arrEti = Array.isArray(data.etiquetas) ? data.etiquetas : [];
+    arrEti.forEach(el => {
+        if (typeof el === 'string') {
+            salidas.push(el);
+        } else if (el && typeof el === 'object') {
+            const v = primerCampoEtiqueta(el);
+            if (v) salidas.push(v);
+        }
+    });
+
+    // 2) Recorre recursivamente o resto da estrutura (agrupamentos, pedidos, etc.)
+    const esClaveEti = clave => /(etiqueta|label|pdf|download|archivo|url|link|href|documento|etiqueta)/i.test(clave);
+    function recorrer(obj) {
+        if (!obj || typeof obj !== 'object') return;
+        if (Array.isArray(obj)) { obj.forEach(recorrer); return; }
+        for (const [k, v] of Object.entries(obj)) {
+            if (typeof v === 'string' && esClaveEti(k) && pareceEtiqueta(v)) {
+                salidas.push(v);
+            } else if (v && typeof v === 'object') {
+                recorrer(v);
+            }
+        }
+    }
+    recorrer(data);
+
+    // Dedupe
+    return [...new Set(salidas.filter(Boolean))];
+}
+
+// Prefiere el campo que contiene uma URL/pdf dentro de um objeto de etiqueta
+function primerCampoEtiqueta(obj) {
+    const preferidas = ['etiqueta', 'label', 'pdf', 'pdf_url', 'url', 'link', 'href', 'download', 'documento', 'archivo', 'nome', 'name'];
+    for (const campo of preferidas) {
+        const val = obj[campo] ?? null;
+        if (typeof val === 'string' && val) return val;
+    }
+    return null;
+}
+
+// Detecta si um string se parece a uma URL/PDF / data-URI de etiqueta
+function pareceEtiqueta(valor) {
+    if (typeof valor !== 'string') return false;
+    return /^https?:\/\//i.test(valor) ||
+        /^data:application\/pdf/i.test(valor) ||
+        /^data:.*;base64,/i.test(valor) ||
+        /%PDF-/.test(valor) ||           // base64 crudo de PDF
+        (valor.length > 60 && /\.pdf($|\?)/i.test(valor));
+}
+// -------------------------------------------------------
+// 9.20.4. ESTADO DE ETIQUETAS (memoria + persistência)
+// -------------------------------------------------------
+// ecs que estão aguardando etiqueta (fila visual "Aguardando...")
+const etiquetasEsperando = new Set();
+// Pendientes de etiqueta que falharam (para resolver antes de fechar o PDF)
+let etiquetasPendientes = [];
+
+function cargarPendientesEtiquetas() {
+    try {
+        etiquetasPendientes = JSON.parse(localStorage.getItem('expedicao_etiquetas_pendientes') || '[]');
+        if (!Array.isArray(etiquetasPendientes)) etiquetasPendientes = [];
+    } catch (e) { etiquetasPendientes = []; }
+    window.etiquetasPendientes = etiquetasPendientes;
+}
+function guardarPendientesEtiquetas() {
+    try { localStorage.setItem('expedicao_etiquetas_pendientes', JSON.stringify(etiquetasPendientes)); } catch (e) {}
+}
+
+function agregarPendienteEtiqueta(ec, errorUsuario, itemId) {
+    if (!ec) return;
+    const idx = etiquetasPendientes.findIndex(p => p.ec === ec);
+    if (idx === -1) {
+        etiquetasPendientes.push({ ec, error: errorUsuario || 'Erro desconocido', fecha: new Date().toISOString(), itemId: itemId || null });
+    } else {
+        etiquetasPendientes[idx].error = errorUsuario || etiquetasPendientes[idx].error;
+        etiquetasPendientes[idx].fecha = new Date().toISOString();
+    }
+    guardarPendientesEtiquetas();
+    window.etiquetasPendientes = etiquetasPendientes;
+}
+
+async function reintentarPendienteEtiqueta(ec) {
+    if (!ec) return;
+    const cnpj = state.activeDespachanteCnpj || '';
+    const res = await procesarPedidoCompletado(ec, cnpj, null);
+    if (res && res.ok) {
+        etiquetasPendientes = etiquetasPendientes.filter(p => p.ec !== ec);
+        guardarPendientesEtiquetas();
+        window.etiquetasPendientes = etiquetasPendientes;
+        renderTable();
+        updateProgress();
+    }
+    return res;
+}
+
+// ----------------------------------------------------------
+// 9.20.5. ORQUESTADOR CENTRAL: procesa la finalización de un PEDIDO
+// ----------------------------------------------------------
+// Se llama cuando un item llega a quantidade=0 (AUN sin marcarlo expedido).
+// Agrupa por `ec` (pedido único): solo cuando TODO el grupo quedó completo
+// se pide la etiqueta. Según resultado se marca o NO como expedido.
+async function procesarPedidoCompletado(ec, cnpj, itemActivador) {
+    if (!ec || ec === 'Sem Pedido') {
+        // Sin ec → no hay etiqueta que pedir; marcamos directo el item
+        if (itemActivador) await marcarItemExpedido(itemActivador);
+        return { ok: true, sinEtiqueta: true };
+    }
+    if (tinyPrintedOrders.has(ec)) {
+        await setEstadoAguardandoEtiqueta(ec, false);
+        await marcarGrupoPedidoExpedido(ec);
+        return { ok: true, yaEmitida: true };
+    }
+    // Espera a que todo o grupo (pedido) este completo de quantidades
+    // antes de pedir la etiqueta (1 sola por `ec`)
+    const grupoDelPedido = state.items.filter(i => String(i.ec).trim() === String(ec).trim());
+    const grupoCompleto = grupoDelPedido.length > 0 && grupoDelPedido.every(i => (i.quantidade || 0) <= 0);
+    if (!grupoCompleto) {
+        // Aún faltan otros items del mismo pedido → no pedir etiqueta todavía
+        return { ok: true, esperandoGrupo: true };
+    }
+    await setEstadoAguardandoEtiqueta(ec, true);
+    const res = await solicitarEtiquetaTiny(ec, cnpj);
+    if (res.ok) {
+        await marcarGrupoPedidoExpedido(ec);
+        await mostrarEtiquetasRecibidas(res, ec);
+        return res;
+    } else {
+        await setEstadoAguardandoEtiqueta(ec, false);
+        agregarPendienteEtiqueta(ec, res.error, itemActivador ? itemActivador.id : null);
+        await mostrarModalErrorEtiqueta(res.error, ec);
+        return res;
+    }
+}
+
+// Marca todos los items del mismo pedido(ec) como expedidos
+async function marcarGrupoPedidoExpedido(ec) {
+    if (!ec) return;
+    const grupo = state.items.filter(i => String(i.ec).trim() === String(ec).trim() && !i.expedido);
+    if (!grupo.length) return;
+    const ahora = new Date().toISOString();
+    for (const gi of grupo) {
+        gi.expedido = true;
+        gi.dataExpedicao = ahora;
+        await db.updateItem(gi);
+    }
+    renderTable();
+    updateProgress();
+    highlightRow(grupo[0].id);
+    checkAllCompleted();
+    return grupo.length;
+}
+
+// Marca un solo item (Sem EAN / sem ec)
+async function marcarItemExpedido(item) {
+    if (!item) return;
+    item.expedido = true;
+    item.dataExpedicao = new Date().toISOString();
+    await db.updateItem(item);
+    renderTable();
+    updateProgress();
+    highlightRow(item.id);
+    checkAllCompleted();
+}
+
+// Refresca o estado "Aguardando etiqueta" na tabela / indicador
+async function setEstadoAguardandoEtiqueta(ec, activo) {
+    if (!ec) return;
+    if (activo) etiquetasEsperando.add(ec); else etiquetasEsperando.delete(ec);
+    renderTable();
+    if (elements.etiquetaEsperandoInd) {
+        elements.etiquetaEsperandoInd.style.display = etiquetasEsperando.size ? 'flex' : 'none';
+        if (elements.etiquetaEsperandoCount) elements.etiquetaEsperandoCount.textContent = String(etiquetasEsperando.size);
+    }
+}
+
+// ---------- Helpers de apertura / impression / modal de preview ----------
+function escHtml(str) {
+    return String(str || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Abre uma URL de etiqueta (si es base64 PDF crudo, decodifica)
+function abrirEtiquetaUrl(url) {
+    if (!url) return;
+    if (/%PDF-/.test(url) && !/^data:/i.test(url)) {
+        try {
+            const bin = atob(url);
+            const blob = new Blob([bin], { type: 'application/pdf' });
+            window.open(URL.createObjectURL(blob), '_blank');
+            return;
+        } catch (e) { console.error('🐞 [Tiny] Falha ao decodificar base64 PDF:', e); return; }
+    }
+    window.open(url, '_blank');
+}
+
+// Tras recibir etiquetas: imprime directo o abre modal de vista previa
+async function mostrarEtiquetasRecibidas(res, ec) {
+    const etiquetas = (res && res.etiquetas) || [];
+    if (!etiquetas.length) return;
+    const autoPrint = localStorage.getItem('expedicao_tiny_auto_imprimir') === '1';
+    if (autoPrint) {
+        etiquetas.forEach(u => abrirEtiquetaUrl(u));
+    } else {
+        abrirEtiquetaPreview(ec, etiquetas);
+    }
+}
+
+function abrirEtiquetaPreview(ec, etiquetas) {
+    if (elements.etiquetaPreviewModal) {
+        elements.etiquetaPreviewModal.style.display = 'flex';
+        elements.etiquetaPreviewUrls = (etiquetas || []).filter(Boolean);
+        if (elements.etiquetaPreviewEcText) elements.etiquetaPreviewEcText.textContent = ec || '';
+        // Checkbox "imprimir las próximas automáticamente" dentro de la modal
+        if (elements.etiquetaPreviewAutoPrint) {
+            elements.etiquetaPreviewAutoPrint.checked = localStorage.getItem('expedicao_tiny_auto_imprimir') === '1';
+        }
+        // Lista de etiquetas
+        const cuerpo = (etiquetas || []).map((u, i) => {
+            const label = (u && u.length > 90) ? u.slice(0, 90) + '…' : (u || '');
+            return `<div style="font-size:12px; word-break:break-all; color:var(--text-secondary); padding:4px 0;">📄 ${i+1}. ${escHtml(label)}</div>`;
+        }).join('') || '<div style="color:var(--text-danger);">Sem URL de etiqueta.</div>';
+        if (elements.etiquetaPreviewBody) elements.etiquetaPreviewBody.innerHTML = cuerpo;
+    } else {
+        (etiquetas || []).forEach(u => abrirEtiquetaUrl(u));
+    }
+}
+function cerrarEtiquetaPreview() { if (elements.etiquetaPreviewModal) elements.etiquetaPreviewModal.style.display = 'none'; }
+
+// Botões da modal de preview
+function imprimirEtiquetasPreview() {
+    const urls = (elements.etiquetaPreviewUrls || []);
+    urls.forEach(u => abrirEtiquetaUrl(u));
+    cerrarEtiquetaPreview();
+}
+function toggleAutoImprimirDesdePreview() {
+    if (!elements.etiquetaPreviewAutoPrint) return;
+    localStorage.setItem('expedicao_tiny_auto_imprimir', elements.etiquetaPreviewAutoPrint.checked ? '1' : '0');
+    showToast('Preferência salva', elements.etiquetaPreviewAutoPrint.checked ?
+        'As próximas etiquetas serão impressas automaticamente.' :
+        'As próximas etiquetas serão abertas em pré-visualização.', 'success');
+}
+
+// ---------- Modal de error amigable de etiqueta ----------
+async function mostrarModalErrorEtiqueta(errorUsuario, ec) {
+    if (!errorUsuario) {
+        errorUsuario = 'Não foi possível gerar a etiqueta. Tente novamente em alguns instantes.';
+    }
+    if (elements.etiquetaErrorModal) {
+        if (elements.etiquetaErrorEc) elements.etiquetaErrorEc.textContent = `Pedido: ${ec || '---'}`;
+        if (elements.etiquetaErrorDesc) elements.etiquetaErrorDesc.textContent = traducirErrorEtiqueta(errorUsuario);
+        elements.etiquetaErrorModal.style.display = 'flex';
+    } else {
+        // Fallback si no hay modal HTML
+        showToast('Error de etiqueta', traducirErrorEtiqueta(errorUsuario), 'error');
+    }
+}
+function cerrarErrorEtiqueta() {
+    if (elements.etiquetaErrorModal) elements.etiquetaErrorModal.style.display = 'none';
+}
+
+// Traduz erros técnicos da API em mensagens entendíveis para o operador
+function traducirErrorEtiqueta(raw) {
+    const s = String(raw || '').toLowerCase();
+    if (s.includes('autenticación') || s.includes('autenticação') || s.includes('401') || s.includes('invalid key') || s.includes('chave inválida')) {
+        return 'A chave de conexão com o sistema de etiquetas não é válida. Verifique se está configurada corretamente nas Configurações.';
+    }
+    if (s.includes('no encontrado') || s.includes('not found') || s.includes('não encontrado') || s.includes('404') || s.includes('no localizado')) {
+        return 'Nenhum pedido com esse código foi encontrado no sistema. Verifique se o pedido existe ou tente novamente mais tarde.';
+    }
+    if (s.includes('conexión') || s.includes('conexão') || s.includes('timeout') || s.includes('curl') || s.includes('comunicar')) {
+        return 'Não foi possível conectar com o servidor de etiquetas. Verifique sua conexão com a internet e tente novamente.';
+    }
+    if (s.includes('procesando') || s.includes('processando') || s.includes('concurrente') || s.includes('422') || s.includes('ocupado')) {
+        return 'O sistema está processando este pedido no momento. Tente novamente em alguns segundos.';
+    }
+    if (s.includes('expedido sin etiqueta') || s.includes('expedido_sem_etiqueta') || s.includes('expedido sem etiqueta')) {
+        return 'O pedido foi processado mas o sistema não conseguiu baixar a etiqueta. Pode já estar gerada; abra a lista de pendentes para tentar novamente.';
+    }
+    if (s.includes('500') || s.includes('servidor tiny') || s.includes('servidor')) {
+        return 'Houve um problema temporário no servidor de etiquetas. Tente novamente em alguns minutos.';
+    }
+    // Default
+    const limpiado = String(raw || 'Erro desconhecido ao gerar a etiqueta.').trim();
+    return `Não foi possível gerar a etiqueta. ${limpiado}`;
+}
 async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
-    const token = localStorage.getItem('expedicao_tiny_token') || '';
+    const token = desofuscarToken(localStorage.getItem('expedicao_tiny_token')) || '';
     const mockMode = localStorage.getItem('expedicao_bipagem_mock') === '1';
     
     // Log de depuração no início da função (mostra se ela está sendo chamada e o estado da config)
@@ -4681,28 +5095,38 @@ async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
     // Em modo simulação (mock), não exige token configurado
     if (!token && !mockMode) {
         console.warn('Tiny: token não configurado no popup de settings');
-        return;
+        return { ok: false, etiquetas: [], error: 'A chave de conexión ainda não está configurada. Abre Configuraciones e colócala.' };
     }
     
     // Verifica se já foi impressa (deduplicação)
     if (tinyPrintedOrders.has(numeroPedido)) {
         console.log(`Tiny: etiqueta já solicitada para ${numeroPedido}`);
-        return;
+        return { ok: true, yaEmitida: true, etiquetas: [] };
     }
     
-    // Valida que o número do pedido é um inteiro válido
-    const pedidoNum = parseInt(numeroPedido, 10);
-    if (isNaN(pedidoNum) || pedidoNum < 1) {
-        console.warn('Tiny: número de pedido inválido:', numeroPedido);
-        showToast('Erro na Etiqueta', `Número de pedido inválido: ${numeroPedido}. Verifique a leitura do PDF.`, 'warning');
-        return;
+    // Valida que o número do pedido é uma string não vazia (aceita formatos por plataforma:
+    // Shopee "123-456789" , MercadoLivre/Transportadora "702-3112191-8144262", Amazon, Magalu, etc.)
+    // IMPORTANTE: NÃO fazer parseInt() — truncaria e enviaria o pedido errado à API.
+    const pedidoStr = String(numeroPedido).trim();
+    if (!pedidoStr) {
+        console.warn('Tiny: número de pedido vazio:', numeroPedido);
+        return { ok: false, etiquetas: [], error: 'El número de pedido está vacío. Revisa que el PDF se haya leído correctamente.' };
     }
-    
+
+    // Deduplicação em voo: evita que 2 expedições concorrentes do mesmo pedido disparem juntas,
+    // o que o backend rejeita com 422 "processando concorrente".
+    if (tinyInFlight.has(pedidoStr)) {
+        console.log(`Tiny: ${pedidoStr} já está sendo processado (in-flight), ignorando chamada duplicada.`);
+        return { ok: false, enEspera: true, etiquetas: [], error: 'El pedido se está procesando en este momento. Inténtalo de nuevo en unos segundos.' };
+    }
+    tinyInFlight.add(pedidoStr);
+
+    const resultado = { ok: false, etiquetas: [], error: '', pedidoStr };
     try {
-        showToast('Imprimindo Etiqueta', `Solicitando etiqueta para pedido ${numeroPedido}...`, 'success');
+        console.log(`🐞 [Tiny] Solicitando etiqueta do pedido ${pedidoStr}...`);
         
         const payload = { 
-            pedidos: [pedidoNum], 
+            pedidos: [pedidoStr], 
             cnpj: cnpj || '',
             token: token  // Enviado via body para o proxy server-side
         };
@@ -4731,33 +5155,45 @@ async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
             if (data && Array.isArray(data.issues) && data.issues.length) {
                 throw new Error(`Body inválido: ${data.issues.join('; ')}`);
             }
+            // Erro interno do servidor Tiny (500) — mostra a mensagem crua do servidor
+            if (response.status === 500 && data && data.error) {
+                throw new Error(`Erro no servidor Tiny (500): ${data.error}`);
+            }
             throw new Error((data && data.message) ? data.message : `Erro HTTP: ${response.status}`);
         }
         
-        const etiquetas = (data && Array.isArray(data.etiquetas)) ? data.etiquetas : [];
+        const etiquetas = extraerEtiquetasRespuesta(data);
+        console.log('🐞 [Tiny] Etiquetas extraídas (tolerante):', (etiquetas || []).length);
+        console.log('🐞 [Tiny] 🧱 ESTRUCTURA da resposta:', JSON.stringify(data, null, 2));
         
         if (etiquetas.length > 0) {
-            console.log('🐞 [Tiny] ✅ ETIQUETA RECEBIDA:', etiquetas.length, '→', etiquetas);
-            etiquetas.forEach(url => {
-                if (url) window.open(url, '_blank');
-            });
-            tinyPrintedOrders.add(numeroPedido);
-            showToast('Etiqueta Gerada', `Etiqueta do pedido ${numeroPedido} aberta para impressão!`, 'success');
+            console.log('🐞 [Tiny] ✅ ETIQUETA RECEBIDA:', etiquetas.length);
+            tinyPrintedOrders.add(pedidoStr);
+            resultado.ok = true;
+            resultado.etiquetas = etiquetas;
+            resultado.error = '';
         } else if (data && Array.isArray(data.pedidos) && data.pedidos.length) {
             const p = data.pedidos[0];
-            // Pedido expedido, mas a etiqueta não pôde ser retornada
-            tinyPrintedOrders.add(numeroPedido);
-            const motivo = p && p.detalhe ? `: ${p.detalhe}` : '';
-            showToast('Pedido Expedido', `Pedido ${numeroPedido} expedido${motivo}.`, p && p.status === 'expedido' ? 'success' : 'error');
-            console.warn('🐞 [Tiny] ⚠️ Pedido expedido SEM etiqueta. status:', p && p.status, '| detalhe:', p && p.detalhe);
+            // Pedido expedido, pero a etiqueta não pôde ser retornada
+            const motivo = p && p.detalhe ? p.detalhe : '';
+            resultado.ok = false;
+            resultado.error = motivo ? `El pedido se procesó pero no se pudo obtener su etiqueta: ${motivo}` : 'El pedido se procesó pero no se pudo obtener su etiqueta.';
+            console.warn('🐞 [Tiny] ⚠️ Pedido expedido SEM etiqueta. status:', p && p.status, '| detalhe:', motivo);
         } else {
-            throw new Error('Nenhuma etiqueta retornada pela API');
+            resultado.ok = false;
+            resultado.error = 'No se recibió ninguna etiqueta del sistema.';
         }
         
+        return resultado;
     } catch (error) {
         console.error('🐞 [Tiny] ❌ FALHA ao obter etiqueta:', error.message);
-        showToast('Erro na Etiqueta', `Não foi possível gerar a etiqueta: ${error.message}`, 'error');
-        }
+        resultado.ok = false;
+        resultado.error = error.message || 'Falló la obtención de la etiqueta.';
+    } finally {
+        // Libera o pedido do set in-flight para permitir futuros reintentos
+        tinyInFlight.delete(pedidoStr);
+    }
+    return resultado;
 }
 
 // ==========================================
@@ -4765,7 +5201,7 @@ async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
 // ==========================================
 // Função para processar expedição em lote via API SellInfoTurbo
 async function bipagerExpedicao(pedidos, cnpj) {
-    const token = localStorage.getItem('expedicao_tiny_token') || '';
+    const token = desofuscarToken(localStorage.getItem('expedicao_tiny_token')) || '';
     const mockMode = localStorage.getItem('expedicao_bipagem_mock') === '1';
 
     if (!token && !mockMode) {
@@ -4777,7 +5213,7 @@ async function bipagerExpedicao(pedidos, cnpj) {
 
     try {
                 const payload = { 
-            pedidos: pedidos.map(p => parseInt(p, 10)), 
+            pedidos: pedidos.map(p => String(p).trim()), 
             cnpj: cnpj || '',
             token: token
         };
@@ -4802,7 +5238,9 @@ async function bipagerExpedicao(pedidos, cnpj) {
         }
 
         const resultados = data?.pedidos || [];
-        const etiquetas = data?.etiquetas || [];
+        const etiquetas = extraerEtiquetasRespuesta(data);
+        console.log('🐞 [Bipagem] ESTRUCTURA da resposta:', JSON.stringify(data, null, 2));
+        console.log('🐞 [Bipagem] Etiquetas extraídas (tolerante):', etiquetas.length);
 
         // Agrupar por status
         const expedidos = [];
@@ -4838,8 +5276,17 @@ async function bipagerExpedicao(pedidos, cnpj) {
 
         // 1. Imprimir etiquetas dos expedidos
         if (expedidos.length > 0) {
-            expedidos.forEach(item => {
-                if (etiquetas[item.indice]) window.open(etiquetas[item.indice], '_blank');
+            etiquetas.forEach(url => {
+                if (!url) return;
+                if (/%PDF-/.test(url) && !/^data:/i.test(url)) {
+                    try {
+                        const bin = atob(url);
+                        const blob = new Blob([bin], { type: 'application/pdf' });
+                        window.open(URL.createObjectURL(blob), '_blank');
+                        return;
+                    } catch (e) { console.error('🐞 [Bipagem] Falha base64 PDF:', e); return; }
+                }
+                window.open(url, '_blank');
             });
             showToast('Etiquetas Geradas', `${expedidos.length} etiqueta(s) aberta(s)!`, 'success');
         }
@@ -5011,6 +5458,72 @@ function initSettingsPopup() {
         });
     }
     
+    // Seletor de Voz TTS no popup
+    const popupTtsVoice = document.getElementById('popup-config-tts-voice');
+    if (popupTtsVoice) {
+        const savedVoiceName = localStorage.getItem('expedicao_tts_voice') || '';
+        ttsVoiceName = savedVoiceName;
+        
+        function popularVozes() {
+            const voices = speechSynthesis.getVoices();
+            popupTtsVoice.innerHTML = '';
+            
+            // Filtra vozes pt-BR e ordena
+            const ptVoices = voices.filter(v => v.lang.startsWith('pt'));
+            const otherVoices = voices.filter(v => !v.lang.startsWith('pt'));
+            
+            if (ptVoices.length === 0 && otherVoices.length === 0) {
+                popupTtsVoice.innerHTML = '<option value="">Nenhuma voz encontrada</option>';
+                return;
+            }
+            
+            // Grupo: Português
+            if (ptVoices.length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = 'Português';
+                ptVoices.forEach(v => {
+                    const opt = document.createElement('option');
+                    opt.value = v.name;
+                    opt.textContent = `${v.name} (${v.lang})`;
+                    if (v.name === ttsVoiceName) opt.selected = true;
+                    optgroup.appendChild(opt);
+                });
+                popupTtsVoice.appendChild(optgroup);
+            }
+            
+            // Grupo: Outras
+            if (otherVoices.length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = 'Outras';
+                otherVoices.forEach(v => {
+                    const opt = document.createElement('option');
+                    opt.value = v.name;
+                    opt.textContent = `${v.name} (${v.lang})`;
+                    if (v.name === ttsVoiceName) opt.selected = true;
+                    optgroup.appendChild(opt);
+                });
+                popupTtsVoice.appendChild(optgroup);
+            }
+        }
+        
+        // Popula as vozes imediatamente e no evento
+        popularVozes();
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = popularVozes;
+        }
+        
+        popupTtsVoice.addEventListener('change', () => {
+            ttsVoiceName = popupTtsVoice.value;
+            localStorage.setItem('expedicao_tts_voice', ttsVoiceName);
+            // Reseta a voz cacheada para forçar re-seleção
+            ttsVoice = null;
+            
+            const voices = speechSynthesis.getVoices();
+            const selected = voices.find(v => v.name === ttsVoiceName);
+            showToast('Voz Alterada', `Voz selecionada: ${selected ? selected.name : 'Padrão'}`, 'success');
+        });
+    }
+    
     // Toggle Turbo no popup
     const popupTurbo = document.getElementById('popup-config-turbo');
     if (popupTurbo) {
@@ -5043,7 +5556,7 @@ function initSettingsPopup() {
     if (popupTinyEnabled && popupTinyToken) {
         // Carregar configurações salvas
         const tinyEnabled = localStorage.getItem('expedicao_tiny_enabled') === '1';
-        const tinyToken = localStorage.getItem('expedicao_tiny_token') || '';
+        const tinyToken = desofuscarToken(localStorage.getItem('expedicao_tiny_token')) || '';
         
         console.log('🐞 [Config] Carregando Tiny → enabled:', tinyEnabled, '| token:', tinyToken ? 'definido' : 'VAZIO');
         
@@ -5058,7 +5571,7 @@ function initSettingsPopup() {
             const enabled = popupTinyEnabled.checked;
             const token = popupTinyToken.value.trim();
             localStorage.setItem('expedicao_tiny_enabled', enabled ? '1' : '0');
-            localStorage.setItem('expedicao_tiny_token', token);
+            localStorage.setItem('expedicao_tiny_token', ofuscarToken(token));
             console.log('🐞 [Config] Salvando Tiny → enabled:', enabled ? '1' : '0', '| token:', token ? 'definido' : 'VAZIO');
             
             if (popupTinySection) {
@@ -5086,6 +5599,19 @@ function initSettingsPopup() {
                 popupBipagemMock.checked ?
                 'As etiquetas serão simuladas. Nenhuma chamada ao endpoint real será feita.'
                 : 'O app voltará a chamar o endpoint real via api.php.', 'success');
+        });
+    }
+    
+    // "Imprimir las próximas etiquetas automáticamente" (persistente)
+    const popupAutoImprimir = document.getElementById('popup-config-tiny-auto-imprimir');
+    if (popupAutoImprimir) {
+        const autoSalvo = localStorage.getItem('expedicao_tiny_auto_imprimir') === '1';
+        popupAutoImprimir.checked = autoSalvo;
+        popupAutoImprimir.addEventListener('change', () => {
+            localStorage.setItem('expedicao_tiny_auto_imprimir', popupAutoImprimir.checked ? '1' : '0');
+            showToast('Preferência salva', popupAutoImprimir.checked ?
+                'As próximas etiquetas serão impressas automaticamente.' :
+                'As próximas etiquetas serão abertas em pré-visualização.', 'success');
         });
     }
     
@@ -5203,7 +5729,16 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     initSettingsPopup();
+    if (typeof initEtiquetasUI === 'function') initEtiquetasUI();
 });
+
+// Expõe globais da integração de etiquetas para o etiquetas-ui.js
+window.etiquetasPendientes = etiquetasPendientes;
+window.reintentarPendienteEtiqueta = reintentarPendienteEtiqueta;
+window.cargarPendientesEtiquetas = cargarPendientesEtiquetas;
+window.cerrarErrorEtiqueta = cerrarErrorEtiqueta;
+window.esHtml = escHtml;
+console.log('🐞 [Tiny] etiquetas-ui globais expostas.');
 
 // Pausa a sincronização quando a janela do navegador perde o foco (economiza CPU/Servidor)
 document.addEventListener('visibilitychange', () => {

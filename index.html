@@ -10,9 +10,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="index.css">
     <!-- PDF.js da Mozilla para leitura de PDF no cliente -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-K7BDXe4UB5vCp3MO3GP0YIPMz7BMsN0P+YCMKpF6hY9w6Q2vGp6aY5p6Q2vGp6a" crossorigin="anonymous"></script>
     <!-- Html5-Qrcode para leitura de código de barras pela câmera -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" integrity="sha384-nyJJaH6v3NpJ7P3jqJ7tA6f3N3N3N3N3N3N3N3N3N3N3N3N3N3N3N3N3N3N3N3N3" crossorigin="anonymous"></script>
 </head>
 <body class="dark-mode">
     <div class="app-container">
@@ -32,6 +32,16 @@
                 </div>
             </div>
             <div class="header-actions">
+                <!-- Indicador "Aguardando etiqueta" (animado) -->
+                <div id="etiqueta-esperando-ind" style="display:none;" title="Pedidos aguardando etiqueta">
+                    <span class="etiqueta-spinner"></span>
+                    <span id="etiqueta-esperando-count" style="font-size:11px; padding:0 4px;">0</span>
+                </div>
+                <!-- Button Pendientes de Etiqueta -->
+                <button class="btn btn-icon" id="btn-etiqueta-pendientes" title="Etiquetas pendentes">
+                    <span>🖨️</span>
+                    <span id="etiqueta-pendientes-badge" class="etiqueta-pendientes-badge" style="display:none;">0</span>
+                </button>
                 <!-- Botão Configurações -->
                 <button class="btn btn-icon" id="btn-open-settings" title="Configurações">
                     <span>⚙️</span>
@@ -56,6 +66,12 @@
                                 <option value="0.7">🐢 Lenta</option>
                                 <option value="1.0" selected>▶️ Normal</option>
                                 <option value="1.3">🐇 Rápida</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin: 6px 0 0 28px;">
+                            <label for="popup-config-tts-voice" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Voz:</label>
+                            <select id="popup-config-tts-voice" style="flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-size: 12px; cursor: pointer;">
+                                <option value="">Carregando vozes...</option>
                             </select>
                         </div>
                         <label class="config-toggle">
@@ -110,6 +126,11 @@
                             <input type="checkbox" id="popup-config-tiny-enabled">
                             <span class="toggle-slider"></span>
                             <span class="toggle-label">Impressão Automática de Etiquetas</span>
+                        </label>
+                        <label class="config-toggle" style="font-size:11px;">
+                            <input type="checkbox" id="popup-config-tiny-auto-imprimir">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">🖨️ Imprimir las próximas etiquetas automáticamente</span>
                         </label>
                         <div class="config-tiny-section" id="popup-config-tiny-section" style="display:none; margin: 8px 0 0 0;">
                             <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Chave da Automação (BIPAGEM_API_KEY)</label>
@@ -512,8 +533,55 @@
         </div>
     </div>
 
-    <!-- Scripts da aplicação -->
+    <!-- Modal: Erro de Etiqueta -->
+    <div id="etiqueta-error-modal" style="display: none;">
+        <div class="error-modal-card">
+            <div class="error-modal-icon">⚠️</div>
+            <h2>Não foi possível gerar a etiqueta</h2>
+            <p id="etiqueta-error-desc">Ocorreu um problema ao gerar a etiqueta deste pedido.</p>
+            <div class="error-modal-code" id="etiqueta-error-ec" style="font-size:14px;">Pedido: ---</div>
+            <div style="font-size:12px; color:var(--text-secondary); margin-top:6px;">Este pedido ficou na lista de pendências. Você pode tentar novamente mais tarde antes de fechar o PDF.</div>
+            <button id="btn-close-etiqueta-error" class="btn btn-danger">ENTENDIDO (Enter)</button>
+        </div>
+    </div>
+
+    <!-- Modal: Lista de Etiquetas Pendentes -->
+    <div id="etiqueta-pendientes-modal" style="display: none;">
+        <div class="error-modal-card">
+            <div class="error-modal-icon">🖨️</div>
+            <h2>Etiquetas pendentes</h2>
+            <p>Você tem pedidos que não puderam gerar sua etiqueta. Resolva antes de fechar o PDF.</p>
+            <div id="etiqueta-pendientes-lista" style="max-height: 220px; overflow-y:auto; margin-top:8px; text-align:left;"></div>
+            <div style="display:flex; gap:8px; margin-top:14px;">
+                <button id="btn-reintentar-todas" class="btn btn-primary" style="flex:1;">Tentar novamente todas</button>
+                <button id="btn-cerrar-pendientes" class="btn btn-outline" style="flex:1;">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Pré-visualização / Impressão de etiqueta -->
+    <div id="etiqueta-preview-modal" style="display: none;">
+        <div class="error-modal-card">
+            <div class="error-modal-icon">🖨️</div>
+            <h2>Etiqueta gerada</h2>
+            <p>Pedido <span id="etiqueta-preview-ec" style="font-family:monospace;">---</span></p>
+            <div id="etiqueta-preview-body" style="font-size:12px; color:var(--text-secondary); margin-top:6px;"></div>
+            <label class="config-toggle" style="font-size:11px; margin-top:8px;">
+                <input type="checkbox" id="etiqueta-preview-auto-print" onchange="toggleAutoImprimirDesdePreview()">
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">🖨️ Imprimir as próximas etiquetas automaticamente</span>
+            </label>
+            <div style="display:flex; gap:8px; margin-top:14px;">
+                <button id="btn-imprimir-etiqueta" class="btn btn-primary" style="flex:1;" onclick="imprimirEtiquetasPreview()">🖨️ Imprimir / Abrir</button>
+                <button id="btn-cerrar-etiqueta-preview" class="btn btn-outline" style="flex:1;" onclick="cerrarEtiquetaPreview()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts da aplicacao -->
+    <script src="config.js"></script>
     <script src="pdf-parser.js?v=8"></script>
-    <script src="app.js?v=8"></script>
+    <script src="app.js?v=12"></script>
+    <script src="etiquetas-ui.js?v=1"></script>
 </body>
 </html>

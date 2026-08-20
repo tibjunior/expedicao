@@ -389,75 +389,87 @@ git push origin main
 
 ---
 
-## 10. Plano Futuro: Integração Tiny — Impressão de Etiquetas
+## 10. Integração Tiny — Impressão de Etiquetas (Bipagem)
 
-**Status:** 📋 Planejado (aguardando informações do usuário)
+**Status:** ✅ Em implementação (deploy pendente de finalização de estilos/UI)
 
-### Visão Geral
- automatizar a impressão de etiquetas de envio sempre que um pedido for **conferido e expedido**. O sistema deverá consultar a API do Tiny ERP para gerar a etiqueta correspondente ao número do pedido.
+### Objetivo (comportamento definido pelo usuário)
 
-### Funcionamento Esperado
-1. Quando um item for bipado e **marcado como expedido** (em `processBarcodeRead()`)
-2. O sistema identifica o **número do pedido** pelo campo `ec` (extraído do PDF)
-3. Dispara uma requisição para o **endpoint da API Tiny** (configurado no popup de configurações)
-4. Abre o PDF da etiqueta retornado em uma nova aba para impressão
+A validação do pedido (enviar para expedição e marcar como **feito/expedido**) **só acontece após a chegada da etiqueta**. O item **não** é marcado como expedido antes de confirmar que a etiqueta foi emitida.
 
-### Campos de Configuração Necessários (Popup ⚙️)
+- Se a etiqueta chegar ✅ → abre a etiqueta (impressão direta ou modal de vista prévia) e marca o pedido (grupo `ec`) como **expedido**.
+- Se der erro ❌ → mostra **popup com erro tratado** (linguagem acessível ao usuário comum, sem jargão técnico), mantém o pedido **não expedido** e o adiciona a uma **lista de pendentes** que deve ser resolvida **antes de fechar o PDF/lista**.
+- **Modelo por pedido único:** agrupa pelo campo `ec` (mercado livre `702-3112191-8144262`, Shopee, Amazon, Magalu, etc.). Só quando **todos** os itens de um mesmo `ec` ficarem com `quantidade = 0` é que a etiqueta é solicitada (1 única por pedido).
+- Durante a espera da resposta, exibe **"Aguardando etiqueta"** com animação.
+- Opção persistente nas Configurações (e no próprio popup): **"Imprimir as próximas etiquetas automaticamente"**.
 
-No menu popup de configurações, adicionar:
-
-1. **Endereço do Endpoint Tiny** (input text)
-   - Onde colar a URL do endpoint fornecido pelo Tiny
-   - Exemplo: `https://api.tiny.com.br/api2/gerar_etiqueta.php`
-
-2. **API Token do Tiny** (input password)
-   - Token de autenticação da API do Tiny ERP
-   - Deve ser armazenado no `localStorage` criptografado (se possível)
-
-3. **Toggle Ativar Impressão Automática** (checkbox)
-   - Ativa/desativa a funcionalidade
-   - Padrão: desativado
-
-### Fluxo Técnico
+### Fluxo Técnico (novo)
 
 ```
-processBarcodeRead() 
-    ↓ (item expedido com sucesso)
-identificarPedido() 
-    ↓ (busca campo `ec` do item)
-solicitarEtiquetaTiny(numeroPedido)
-    ↓ (fetch POST para endpoint Tiny)
-respostaTiny()
-    ↓ (processa retorno: PDF base64 ou URL)
-abrirEtiqueta(blobPdf)
+[item bipado / manual / sem EAN]
+    ↓ (decrementa quantidade; NÃO marca expedido ainda)
+se quantidade == 0
+    ↓
+procesarPedidoCompletado(ec, cnpj, item)
+    ├─ ec vazio / "Sem Pedido" → marcarItemExpedido(item)
+    ├─ etiqueta já emitida (tinyPrintedOrders) → marcarGrupoPedidoExpedido(ec)
+    ├─ grupo do pedido ainda incompleto → aguarda (esperandoGrupo)
+    └─ grupo completo → setEstadoAguardandoEtiqueta(ec, true)
+                            ↓ solicitarEtiquetaTiny(ec, cnpj)  (retorna {ok, etiquetas, error})
+        ├─ ok ✅ → marcarGrupoPedidoExpedido(ec) → mostrarEtiquetasRecibidas(res, ec)
+        │            (impressão direta OU modal preview, conforme auto_imprimir)
+        └─ erro ❌ → agregarPendienteEtiqueta(ec, error) → mostrarModalErrorEtiqueta(error, ec)
 ```
 
-### Considerações Técnicas
+### Funções implementadas (app.js)
 
-- **Número do pedido:** Campo `ec` do item no IndexedDB — formatos variam por plataforma (Shopee, MercadoLivre/Transportadora, Amazon, Magalu)
-- **Disparo único:** Verificar se a etiqueta já foi solicitada para aquele pedido antes de repetir (evitar duplicatas)
-- **Formato de retorno:** Aguardando definição — pode ser PDF em base64, URL temporária, ou outro formato
-- **Tratamento de erros:** Se a API Tiny falhar, não bloquear o fluxo de expedição — apenas logar o erro e notificar o operador via toast
+- `procesarPedidoCompletado(ec, cnpj, item)` — orquestador central.
+- `marcarGrupoPedidoExpedido(ec)` / `marcarItemExpedido(item)` — marca os itens como expedidos.
+- `solicitarEtiquetaTiny(numeroPedido, cnpj)` — agora **retorna** `{ ok, etiquetas, error }` e **não** abre/expede por conta própria.
+- `extraerEtiquetasRespuesta(data)` — extração tolerante do PDF/URL (etiquetas, agrupamentos, base64, objetos).
+- `abrirEtiquetaUrl(url)` / `mostrarEtiquetasRecibidas` / `abrirEtiquetaPreview` / `imprimirEtiquetasPreview` — abertura/impressão.
+- `mostrarModalErrorEtiqueta(error, ec)` / `traducirErrorEtiqueta(raw)` — erro amigável.
+- `agregarPendienteEtiqueta`, `reintentarPendienteEtiqueta`, `renderListaPendientes`, `abrirModalPendientes` — lista de pendentes persistida em `localStorage` (`expedicao_etiquetas_pendientes`).
+- `setEstadoAguardandoEtiqueta(ec, activo)` — banner/indicador "Aguardando etiqueta".
+- `checkAllCompleted()` — agora só conclui a lista quando **todos** os itens estão `expedido` e **não** existem pendentes/aguardando.
+- `escHtml`, `abrirEtiquetaUrl` etc. — helpers de segurança/abertura.
 
-### Status das Respostas do Usuário
+### Estados de etiqueta
 
-| Campo | Valor | Status |
-|-------|-------|--------|
-| Endpoint | A ser fornecido pelo usuário | ⏳ Aguardando |
-| API Token | A ser fornecido pelo usuário | ⏳ Aguardando |
-| Formato de retorno | A ser confirmado (base64/URL?) | ❓ Não informado |
-| CPF/CNPJ necessário | Não informado | ❓ Não informado |
-| Chave de acesso | Não informado | ❓ Não informado |
+| Estado | Quando | Comportamento |
+|--------|--------|---------------|
+| `etiquetasEsperando` | grupo completo aguardando resposta da API | badge "Aguardando etiqueta" + spinner |
+| `etiquetasPendientes` | etiqueta falhou | fica para reintentar antes de fechar o PDF |
+| `tinyPrintedOrders` | etiqueta já emitida/impressa | pedido é marcado expedido sem nova chamada |
+| `tinyInFlight` | requisição em andamento | evita chamadas concorrentes (422) |
 
-### Próximos Passos (quando o usuário fornecer as informações)
+### Configurações (Popup ⚙️)
 
-1. Adicionar campos de configuração no popup de configurações (HTML + CSS)
-2. Criar função `solicitarEtiquetaTiny(numeroPedido, token, endpoint)`
-3. Implementar lógica de deduplicação (evitar múltiplas requisições por mesmo pedido)
-4. Integrar no fluxo de expedição (`processBarcodeRead`)
-5. Adicionar tratamento de erros e feedback ao operador
-6. Testar com cada plataforma (Shopee, ML, Amazon, Magalu)
+1. **Chave da Automação (BIPAGEM_API_KEY)** — `popup-tiny-token` → armazenada em `expedicao_tiny_token`.
+2. **Toggle `popup-config-tiny-enabled`** — habilita a funcionalidade (`expedicao_tiny_enabled`).
+3. **Toggle 🧪 Modo Simulação** — `popup-config-bipagem-mock` (`expedicao_bipagem_mock`).
+4. **Toggle 🖨️ Imprimir as próximas etiquetas automaticamente** — `popup-config-tiny-auto-imprimir` / `expedicao_tiny_auto_imprimir` (também no popup de vista prévia, `toggleAutoImprimirDesdePreview`).
+
+> Obs.: O envio ao endpoint `dashvturbo.kn8x.com.br/api/bipagem/expedicao` é feito de forma **server-side** via `api.php` (ação `bipagem_expedicao`), preservando a string completa do `ec` sem truncá-la (o anterior `parseInt`/`intval` truncava o Mercado Livre para o nº do site `702`).
+
+### Erros tratados (linguagem amigável)
+
+| Erro técnico | Mensagem ao usuário |
+|--------------|---------------------|
+| 401 / chave inválida | A chave de conexão com o sistema de etiquetas não é válida. |
+| 404 / não encontrado | Não se encontrou nenhum pedido com esse código. |
+| timeout / conexão | Não se pôde conectar com o servidor de etiquetas. |
+| 422 / concorrente | O sistema está processando este pedido agora; tente novamente em segundos. |
+| expedido sem etiqueta | O pedido se processou mas não se pôde baixar a etiqueta. |
+| 500 / servidor | Problema temporário no servidor; tente novamente em minutos. |
+
+### Próximos passos
+
+1. Finalizar estilos CSS dos novos modais/badges/indicador.
+2. Chamar `initEtiquetasUI()` na inicialização da aplicação.
+3. Subir versão em `index.html` e realizar deploy via FTP (`node deploy.js`).
+4. Testar fluxo de sucesso e de erro em Modo Simulação; validar string completa no endpoint.
 
 ---
 
-*Documento gerado em 20/07/2026 · Última atualização: 21/07/2026 16:13 · Mantenha atualizado com cada nova funcionalidade*
+*Documento gerado em 20/07/2026 · Última atualização: 20/08/2026 · Mantenha atualizado com cada nova funcionalidade*

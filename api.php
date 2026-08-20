@@ -39,10 +39,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // ==========================================
 // 1.4 - AUTENTICAÇÃO POR TOKEN
 // ==========================================
-// Token definido aqui (em produção, ler de config fora da pasta pública)
+// Token lido de variável de ambiente ou arquivo .env
 // Para gerar um token seguro: php -r "echo bin2hex(random_bytes(32));"
-define('API_TOKEN', 'expedicao_api_token_2026_seguro_aqui');
-define('BIPAGEM_API_KEY', getenv('BIPAGEM_API_KEY') ?: 'bipagem_key_producao_kn8x_aqui');
+// Em produção, configure a variável de ambiente API_TOKEN
+
+// Tenta ler de variável de ambiente primeiro
+$apiToken = getenv('API_TOKEN');
+$bipagemApiKey = getenv('BIPAGEM_API_KEY');
+
+// Se não encontrar, tenta ler de arquivo .env
+if (!$apiToken || !$bipagemApiKey) {
+    $envFile = __DIR__ . '/.env';
+    if (file_exists($envFile)) {
+        $envLines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($envLines as $line) {
+            if (strpos($line, '#') === 0) continue;
+            if (strpos($line, '=') !== false) {
+                list($key, $value) = explode('=', $line, 2);
+                $key = trim($key);
+                $value = trim($value, ' "\'');
+                if ($key === 'API_TOKEN' && !$apiToken) $apiToken = $value;
+                if ($key === 'BIPAGEM_API_KEY' && !$bipagemApiKey) $bipagemApiKey = $value;
+            }
+        }
+    }
+}
+
+// Fallback para valores padrão (apenas para desenvolvimento)
+if (!$apiToken) $apiToken = 'expedicao_api_token_2026_seguro_aqui';
+if (!$bipagemApiKey) $bipagemApiKey = 'bipagem_key_producao_kn8x_aqui';
+
+define('API_TOKEN', $apiToken);
+define('BIPAGEM_API_KEY', $bipagemApiKey);
 
 function authenticateRequest() {
     $headers = getallheaders();
@@ -277,8 +305,6 @@ switch ($action) {
                 break;
             }
             
-            $cnpj = isset($input['cnpj']) ? sanitize(trim($input['cnpj'])) : '';
-            
             $stmt = $db->prepare("INSERT INTO despachantes (nome, data_criacao, data_limite, cnpj, concluido) VALUES (:nome, :data_criacao, :data_limite, :cnpj, 0)");
             $stmt->execute([
                 ':nome' => $nome,
@@ -294,8 +320,8 @@ switch ($action) {
         break;
 
         case 'bipagem_expedicao':
-        // Este endpoint é público para o frontend (device confiável)
-        // Recebe o token do localStorage via body e encaminha para a API Tiny
+        // Endpoint para bipagem de expedição - requer autenticação
+        authenticateRequest();
         try {
             $input = json_decode(file_get_contents('php://input'), true);
             if (!$input) {
@@ -304,7 +330,17 @@ switch ($action) {
                 break;
             }
             
-            $pedidos = isset($input['pedidos']) ? array_map('intval', $input['pedidos']) : [];
+            // Pedidos en formato string (por plataforma: Shopee, MercadoLivre "702-3112191-8144262",
+            // Amazon, Magalu...). NO usar intval/parseInt — truncaría y enviaría el pedido equivocado.
+            $pedidos = [];
+            if (isset($input['pedidos']) && is_array($input['pedidos'])) {
+                foreach ($input['pedidos'] as $p) {
+                    $pedidoStr = sanitize(trim((string)$p));
+                    if ($pedidoStr !== '') {
+                        $pedidos[] = $pedidoStr;
+                    }
+                }
+            }
             $cnpj = isset($input['cnpj']) ? sanitize(trim($input['cnpj'])) : '';
             // Token recebido do frontend (vem do localStorage do device confiável)
             $bearerToken = isset($input['token']) ? sanitize(trim($input['token'])) : BIPAGEM_API_KEY;
@@ -349,6 +385,17 @@ switch ($action) {
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
+            
+            // Registra no log do servidor quando a API retornar erro (para diagnóstico)
+            if ($httpCode >= 400) {
+                $logdados = [
+                    'http' => $httpCode,
+                    'pedidos' => $pedidos,
+                    'cnpj' => ($cnpj ?: '(vazio)'),
+                    'resposta' => substr((string)$response, 0, 500)
+                ];
+                error_log('[BIPAGEM] ' . json_encode($logdados, JSON_UNESCAPED_UNICODE));
+            }
             
             // Encaminha o código HTTP da API Tiny para o frontend
             http_response_code($httpCode);
@@ -546,12 +593,60 @@ switch ($action) {
             $input = json_decode(file_get_contents('php://input'), true);
             $id = isset($input['id']) ? intval($input['id']) : 0;
             
+            if ($id <= 0) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "ID inválido."]);
+                break;
+            }
+            
             $stmt = $db->prepare("UPDATE despachantes SET concluido = 1 WHERE id = :id");
             $stmt->execute([':id' => $id]);
             echo json_encode(["status" => "success"]);
         } catch (PDOException $e) {
             http_response_code(500);
             echo json_encode(["status" => "error", "message" => "Erro ao marcar concluído."]);
+        }
+        break;
+
+    case 'reabrir_despachante':
+        authenticateRequest();
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $id = isset($input['id']) ? intval($input['id']) : 0;
+            
+            if ($id <= 0) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "ID inválido."]);
+                break;
+            }
+            
+            $stmt = $db->prepare("UPDATE despachantes SET concluido = 0 WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+            echo json_encode(["status" => "success"]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao reabrir despachante."]);
+        }
+        break;
+
+    case 'delete_log':
+        authenticateRequest();
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $id = isset($input['id']) ? intval($input['id']) : 0;
+            
+            if ($id <= 0) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "ID inválido."]);
+                break;
+            }
+            
+            $stmt = $db->prepare("DELETE FROM logs WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+            echo json_encode(["status" => "success"]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao deletar log."]);
         }
         break;
 
