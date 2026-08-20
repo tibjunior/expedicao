@@ -4895,6 +4895,13 @@ async function reintentarPendienteEtiqueta(ec) {
     return res;
 }
 
+function cancelarPendienteEtiqueta(ec) {
+    if (!ec) return;
+    etiquetasPendientes = etiquetasPendientes.filter(p => p.ec !== ec);
+    guardarPendientesEtiquetas();
+    window.etiquetasPendientes = etiquetasPendientes;
+}
+
 // ----------------------------------------------------------
 // 9.20.5. ORQUESTADOR CENTRAL: procesa la finalización de un PEDIDO
 // ----------------------------------------------------------

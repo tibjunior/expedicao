@@ -2,6 +2,7 @@
 // etiquetas-ui.js — UI de Etiquetas Tiny (pendientes / esperando / modais)
 // Depende de funciones globais de app.js:
 //   - reintentarPendienteEtiqueta(ec)
+//   - cancelarPendienteEtiqueta(ec)
 //   - cargarPendientesEtiquetas()
 //   - etiquetasPendientes (array global)
 //   - escHtml()
@@ -31,16 +32,28 @@ function renderListaPendientes() {
                 <div style="font-size:12px; font-weight:600; color:var(--text-primary); font-family:monospace;">${ec}</div>
                 <div style="font-size:11px; color:var(--text-danger); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${err}">${err}</div>
             </div>
-            <button class="btn btn-outline btn-reintentar-uno" data-ec="${escHtml(p.ec || '')}" style="padding:3px 8px; font-size:11px; height:auto; flex-shrink:0;">Reintentar</button>
+            <div style="display:flex; gap:4px; flex-shrink:0;">
+                <button class="btn btn-outline btn-reenviar-uno" data-ec="${escHtml(p.ec || '')}" style="padding:3px 8px; font-size:11px; height:auto;">Reenviar</button>
+                <button class="btn btn-danger-outline btn-cancelar-uno" data-ec="${escHtml(p.ec || '')}" style="padding:3px 8px; font-size:11px; height:auto;">Cancelar</button>
+            </div>
         </div>`;
     }).join('');
 
-    elements.etiquetaPendientesLista.querySelectorAll('.btn-reintentar-uno').forEach(btn => {
+    elements.etiquetaPendientesLista.querySelectorAll('.btn-reenviar-uno').forEach(btn => {
         btn.addEventListener('click', async () => {
             const ec = btn.getAttribute('data-ec');
             btn.disabled = true;
             btn.textContent = '...';
             await reintentarPendienteEtiqueta(ec);
+            renderListaPendientes();
+            refreshEtiquetaBadge();
+        });
+    });
+
+    elements.etiquetaPendientesLista.querySelectorAll('.btn-cancelar-uno').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const ec = btn.getAttribute('data-ec');
+            cancelarPendienteEtiqueta(ec);
             renderListaPendientes();
             refreshEtiquetaBadge();
         });
@@ -73,6 +86,7 @@ function initEtiquetasUI() {
         elements.btnCerrarPendientes.addEventListener('click', cerrarModalPendientes);
     }
     if (elements.btnReintentarTodas) {
+        elements.btnReintentarTodas.textContent = 'Reenviar todas';
         elements.btnReintentarTodas.addEventListener('click', async () => {
             const copia = (window.etiquetasPendientes || []).slice();
             for (const p of copia) {
