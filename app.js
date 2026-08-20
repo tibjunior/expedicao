@@ -4759,9 +4759,15 @@ async function bipagerFetch(payload) {
     }
 
     // === MODO REAL — chama o proxy api.php (server-side, sem CORS) ===
+    const apiToken = (typeof CONFIG !== 'undefined' && CONFIG.API_TOKEN) 
+        ? CONFIG.API_TOKEN 
+        : localStorage.getItem('expedicao_api_token') || '';
     return fetch('api.php?action=bipagem_expedicao', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiToken}`
+        },
         body: JSON.stringify(payload)
     });
 }
