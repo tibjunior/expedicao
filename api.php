@@ -42,7 +42,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Token definido aqui (em produção, ler de config fora da pasta pública)
 // Para gerar um token seguro: php -r "echo bin2hex(random_bytes(32));"
 define('API_TOKEN', 'expedicao_api_token_2026_seguro_aqui');
-define('BIPAGEM_API_KEY', getenv('BIPAGEM_API_KEY') ?: 'bipagem_key_producao_kn8x_aqui');
+
+// AÇÃO MANUAL NECESSÁRIA NO SERVIDOR DE PRODUÇÃO (HostGator) para não
+// quebrar a expedição de etiqueta: crie o arquivo
+// <pasta-pai-da-pasta-publica>/bipagem-config.php (fora do Git, fora da
+// pasta pública) com:
+//   <?php return ['BIPAGEM_API_KEY' => 'SUA_CHAVE_AQUI'];
+// Ou, se o hosting suportar variável de ambiente (SetEnv no .htaccess,
+// ou painel do HostGator), defina BIPAGEM_API_KEY lá em vez do arquivo.
+// Sem um dos dois, a bipagem passa a responder 401 até isso ser feito.
+//
+// BIPAGEM_API_KEY nunca fica hardcoded aqui — só env real (getenv) ou um
+// arquivo de config FORA da pasta pública e fora do Git (mesmo padrão do
+// banco SQLite em '../expedicao.db'). Sem nenhum dos dois, a constante
+// fica vazia e o endpoint bipagem_expedicao recusa com 401 (ver validação
+// "if (!$bearerToken)" mais abaixo) em vez de usar um segredo escondido.
+function carregarBipagemApiKeyDeArquivoConfig() {
+    $configFile = __DIR__ . '/../bipagem-config.php';
+    if (!file_exists($configFile)) {
+        return '';
+    }
+    $config = require $configFile;
+    return is_array($config) && isset($config['BIPAGEM_API_KEY']) ? $config['BIPAGEM_API_KEY'] : '';
+}
+define('BIPAGEM_API_KEY', getenv('BIPAGEM_API_KEY') ?: carregarBipagemApiKeyDeArquivoConfig());
 
 function authenticateRequest() {
     $headers = getallheaders();
@@ -304,7 +327,13 @@ switch ($action) {
                 break;
             }
             
-            $pedidos = isset($input['pedidos']) ? array_map('intval', $input['pedidos']) : [];
+            // Nunca força intval: o identificador vindo do frontend é o
+            // número do pedido no e-commerce/marketplace (Nº EC do PDF),
+            // não o número interno do Tiny — formato varia por canal
+            // (Mercado Livre, Shopee, Magalu, Amazon, TikTok Shop).
+            $pedidos = isset($input['pedidos'])
+                ? array_map(function ($p) { return sanitize(trim(strval($p))); }, $input['pedidos'])
+                : [];
             $cnpj = isset($input['cnpj']) ? sanitize(trim($input['cnpj'])) : '';
             // Token recebido do frontend (vem do localStorage do device confiável)
             $bearerToken = isset($input['token']) ? sanitize(trim($input['token'])) : BIPAGEM_API_KEY;
