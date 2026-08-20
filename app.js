@@ -76,11 +76,10 @@ class ExpedicaoDB {
         const token = (typeof CONFIG !== 'undefined' && CONFIG.API_TOKEN) 
             ? CONFIG.API_TOKEN 
             : localStorage.getItem('expedicao_api_token') || '';
-        const response = await fetch(`api.php?action=${action}`, {
+        const response = await fetch(`api.php?action=${action}&token=${encodeURIComponent(token)}`, {
             method: 'POST',
             headers: { 
-                'Content-Type': 'application/json',
-                'X-API-Token': token
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(data)
         });

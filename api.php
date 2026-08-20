@@ -99,11 +99,17 @@ function authenticateRequest() {
         return true;
     }
     
+    // Fallback: token via query parameter (sempre funciona em CGI)
+    $queryToken = $_GET['token'] ?? '';
+    if ($queryToken && hash_equals(API_TOKEN, trim($queryToken))) {
+        return true;
+    }
+    
     // Se não houver token, permite apenas leitura (GET) sem autenticação
     // Para escrita (POST), exige token
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(401);
-        echo json_encode(["status" => "error", "message" => "Autenticação necessária. Envie header: Authorization: Bearer <token>"]);
+        echo json_encode(["status" => "error", "message" => "Autenticação necessária. Envie token via header, X-API-Token ou parâmetro ?token="]);
         exit();
     }
     
@@ -137,8 +143,14 @@ function authenticateRequestFlexible() {
         return true;
     }
     
+    // 3. Tenta token via query parameter (sempre funciona em CGI)
+    $queryToken = $_GET['token'] ?? '';
+    if ($queryToken && hash_equals(API_TOKEN, trim($queryToken))) {
+        return true;
+    }
+    
     http_response_code(401);
-    echo json_encode(["status" => "error", "message" => "Autenticação necessária. Envie header: Authorization: Bearer <token>"]);
+    echo json_encode(["status" => "error", "message" => "Autenticação necessária."]);
     exit();
 }
 
