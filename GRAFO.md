@@ -81,6 +81,17 @@ pedidos e emitir etiquetas no Tiny ERP automaticamente.
     `8570754`; sem push/merge ainda). expedicao branch `develop`
     (commits `71d597f`, `ab21030`). 971 testes verdes no SellInfoTurbo,
     typecheck limpo; `npm test` 7/7 no expedicao. Ver plano para detalhe.
+  - 2026-08-20: revisão adversarial achou 2 bugs reais (label de situação
+    de nota fiscal errado; pedido idempotente com nota inválida ficava
+    sem aviso) — corrigidos, commit `06d7863`. Também achou que a
+    correção de auth do proxy (`bipagem-tiny-sellinfo`) era mais fraca
+    do que a doc dizia — corrigido o texto, débito técnico registrado
+    como nó `bipagem-auth-fraca` (planejada).
+  - 2026-08-20 (humano): aprovou e pediu merge da branch
+    `feat/bipagem-danfe-nota-fiscal` na main do SellInfoTurbo — feito,
+    commit `b8bd249`, local apenas (sem push). Decidiu NÃO mergear a
+    branch `develop` do expedicao ainda — nó continua `em-curso` até
+    isso acontecer.
 - **delta**:
 - **e2e**: pulado-pelo-humano (2026-08-20 — sem conexão real ao Tiny nem
   PHP local disponível; humano optou pela evidência de testes
