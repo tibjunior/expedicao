@@ -73,8 +73,15 @@ define('API_TOKEN', $apiToken);
 define('BIPAGEM_API_KEY', $bipagemApiKey);
 
 function authenticateRequest() {
-    $headers = getallheaders();
+    // Tenta getallheaders() primeiro, depois $_SERVER (compatível com CGI/FPM)
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    
     $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+    
+    // Fallback: $_SERVER é mais confiável em alguns ambientes
+    if (!$authHeader) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    }
     
     // Formato esperado: "Bearer <token>"
     if (preg_match('/^Bearer\s+(.+)$/i', $authHeader, $matches)) {

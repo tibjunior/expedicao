@@ -13,7 +13,8 @@ const ALLOWED_FILES = [
     'favicon.svg',
     'logo.png',
     'api.php',
-    '.htaccess'
+    '.htaccess',
+    '.env'
 ];
 
 /**
