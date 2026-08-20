@@ -37,6 +37,7 @@ pedidos e emitir etiquetas no Tiny ERP automaticamente.
 ## Índice de nós [carga: sempre]
 
 - bipagem-tiny-sellinfo | em-curso | Auditar/corrigir integração de bipagem com API do SellInfoTurbo
+- bipagem-danfe-nota-fiscal | em-curso | Gerar também o link de impressão da DANFE (nota fiscal) junto com a etiqueta de envio na bipagem
 - core-conferencia-expedicao | entregue | Parsing de PDF, fila de conferência por bipagem, filtros/busca/log/CSV → ver GRAFO-ARQUIVO.md
 - persistencia-multi-modo | entregue | IndexedDB local / api.php+SQLite remoto / fila offline sincronizável → ver GRAFO-ARQUIVO.md
 - admin-despachantes-lojas | entregue | CRUD de despachantes e lojas via api.php → ver GRAFO-ARQUIVO.md
@@ -44,6 +45,40 @@ pedidos e emitir etiquetas no Tiny ERP automaticamente.
 - deploy-continuo-ftp | entregue | Auto-deploy FTP ao salvar arquivos monitorados → ver GRAFO-ARQUIVO.md
 
 ## Nós [carga: auto — carregar somente os nós tocados pela demanda]
+
+### bipagem-danfe-nota-fiscal
+
+- **id**: bipagem-danfe-nota-fiscal
+- **estado**: em-curso
+- **origem**: humano
+- **depende-de**: [bipagem-tiny-sellinfo]
+- **objetivo**: Ao expedir/bipar um pedido, gerar automaticamente também o
+  link de impressão da DANFE (nota fiscal) — hoje só a etiqueta de envio
+  sai automaticamente; o operador precisa da nota fiscal física junto com
+  a mercadoria para o despacho ser válido.
+- **criterios-aceite**: ver spec dedicada —
+  `docs/audora/specs/bipagem-danfe-nota-fiscal-escopo.md` (categoria ALTA).
+- **fora-de-escopo**: ver spec dedicada —
+  `docs/audora/specs/bipagem-danfe-nota-fiscal-escopo.md`.
+- **decisoes**:
+  - 2026-08-20 (humano): as duas devem sair juntas no momento da
+    separação/bipagem — não é uma tela separada para buscar a nota depois.
+  - 2026-08-20 (humano): sem nota vinculada, ou nota cancelada → bloqueia
+    a expedição inteira do pedido (não expede só com a etiqueta).
+  - 2026-08-20 (humano): verificação usa banco local primeiro, mas
+    confirma ao vivo no Tiny antes de bloquear (nunca bloqueia só por
+    atraso de sincronização).
+  - 2026-08-20 (humano): cada erro/motivo tem status e mensagem própria
+    (não uma mensagem genérica única) — operador vê exatamente qual dos
+    cenários aconteceu.
+  - 2026-08-20 (humano): etiqueta e DANFE abrem cada uma em nova aba
+    separada (não combina num PDF único).
+  - 2026-08-20 (humano): só o fluxo de bipagem individual já em uso —
+    `bipagerExpedicao` (código morto, sem chamador) fica fora.
+- **delta**:
+- **e2e**: pendente
+- **feedback-reprovacao**:
+- **atualizado-em**: 2026-08-20
 
 ### bipagem-tiny-sellinfo
 
