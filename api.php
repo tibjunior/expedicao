@@ -102,6 +102,37 @@ function authenticateRequest() {
     return false; // GET sem token é permitido (leitura)
 }
 
+/**
+ * Autenticação flexível: tenta header Authorization, depois campo 'api_token' no body.
+ * Útil para hostings que strippeiam headers em modo CGI/FPM.
+ */
+function authenticateRequestFlexible() {
+    // 1. Tenta autenticação por header (funciona em modo Apache/mod_php)
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+    if (!$authHeader) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    }
+    if (preg_match('/^Bearer\s+(.+)$/i', $authHeader, $matches)) {
+        $token = trim($matches[1]);
+        if (hash_equals(API_TOKEN, $token)) {
+            return true;
+        }
+    }
+    
+    // 2. Tenta autenticação por campo 'api_token' no body JSON
+    $input = json_decode(file_get_contents('php://input'), true);
+    if ($input && isset($input['api_token'])) {
+        if (hash_equals(API_TOKEN, trim($input['api_token']))) {
+            return true;
+        }
+    }
+    
+    http_response_code(401);
+    echo json_encode(["status" => "error", "message" => "Autenticação necessária. Envie header: Authorization: Bearer <token>"]);
+    exit();
+}
+
 // ==========================================
 // 1.2 - BANCO FORA DA PASTA PÚBLICA
 // ==========================================
@@ -327,8 +358,10 @@ switch ($action) {
         break;
 
         case 'bipagem_expedicao':
-        // Endpoint para bipagem de expedição - requer autenticação
-        authenticateRequest();
+        // Endpoint para bipagem de expedição
+        // Autenticação via header Authorization OU via campo 'api_token' no body
+        // (hosting CGI pode strippear headers Authorization)
+        authenticateRequestFlexible();
         try {
             $input = json_decode(file_get_contents('php://input'), true);
             if (!$input) {

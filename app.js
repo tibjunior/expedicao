@@ -4762,13 +4762,14 @@ async function bipagerFetch(payload) {
     const apiToken = (typeof CONFIG !== 'undefined' && CONFIG.API_TOKEN) 
         ? CONFIG.API_TOKEN 
         : localStorage.getItem('expedicao_api_token') || '';
+    const payloadWithAuth = { ...payload, api_token: apiToken };
     return fetch('api.php?action=bipagem_expedicao', {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiToken}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payloadWithAuth)
     });
 }
 
