@@ -4778,8 +4778,8 @@ async function bipagerExpedicao(pedidos, cnpj) {
     showToast('Enviando Expedição', `Processando ${pedidos.length} pedido(ns)...`, 'success');
 
     try {
-                const payload = { 
-            pedidos: pedidos.map(p => parseInt(p, 10)), 
+        const payload = {
+            pedidos: pedidos.map(p => normalizarIdentificadorPedido(p)).filter(Boolean),
             cnpj: cnpj || '',
             token: token
         };
