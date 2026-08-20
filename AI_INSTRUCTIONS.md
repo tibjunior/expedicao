@@ -418,10 +418,14 @@ POST https://dashvturbo.kn8x.com.br/api/bipagem/expedicao
     Authorization: Bearer <token do localStorage ou BIPAGEM_API_KEY do servidor>
     body: { pedidos: ["<Nº EC do PDF>"], cnpj }
     ↓
-SellInfoTurbo resolve o pedido por numeroPedidoEcommerce, expede no Tiny,
-devolve { agrupamentos, etiquetas, pedidos: [{ numero, status, detalhe }] }
+SellInfoTurbo resolve o pedido por numeroPedidoEcommerce, verifica nota
+fiscal (bloqueia se ausente/cancelada — status sem_nota_fiscal /
+nota_fiscal_cancelada / erro_verificacao_nota_fiscal), expede no Tiny,
+devolve { agrupamentos, etiquetas, pedidos: [{ numero, status, detalhe,
+notaFiscalLink, notaFiscalIndisponivel }] }
     ↓
-Etiqueta(s) abrem em nova aba; toast de sucesso/erro conforme status
+Etiqueta e DANFE abrem cada uma em nova aba; toast de sucesso/erro/aviso
+conforme status (mensagem específica por motivo — nunca genérica)
 ```
 
 ### Identificador do pedido — ponto crítico
@@ -442,6 +446,16 @@ número interno do Tiny. Formato varia por canal (exemplos reais de
 Por isso o app **nunca** converte esse valor para inteiro — sempre manda
 como string (`normalizarIdentificadorPedido`), e o SellInfoTurbo resolve
 pelo campo `numeroPedidoEcommerce` (não pelo número interno do Tiny).
+
+### Nota fiscal obrigatória para expedir
+
+Desde 2026-08-20, o sistema bloqueia a expedição de um pedido sem nota
+fiscal válida (Autorizada ou Emitida DANFE) no Tiny — não expede só com
+a etiqueta. A verificação usa primeiro o banco local do SellInfoTurbo,
+confirmando ao vivo no Tiny quando necessário (nunca bloqueia só por
+atraso de sincronização). Três status possíveis de bloqueio, cada um com
+mensagem própria no toast: `sem_nota_fiscal`, `nota_fiscal_cancelada`,
+`erro_verificacao_nota_fiscal`.
 
 ### Autenticação do proxy — dois tokens diferentes, não confundir
 
