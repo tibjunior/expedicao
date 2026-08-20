@@ -76,9 +76,8 @@ function authenticateRequest() {
     // Tenta getallheaders() primeiro, depois $_SERVER (compatível com CGI/FPM)
     $headers = function_exists('getallheaders') ? getallheaders() : [];
     
+    // Tenta múltiplas fontes do header (compatibilidade com CGI/FPM)
     $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-    
-    // Fallback: $_SERVER é mais confiável em alguns ambientes
     if (!$authHeader) {
         $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
     }
@@ -89,6 +88,15 @@ function authenticateRequest() {
         if (hash_equals(API_TOKEN, $token)) {
             return true;
         }
+    }
+    
+    // Fallback: header customizado X-API-Token (não é strippeado por CGI)
+    $xApiToken = $headers['X-API-Token'] ?? $headers['X-Api-Token'] ?? '';
+    if (!$xApiToken) {
+        $xApiToken = $_SERVER['HTTP_X_API_TOKEN'] ?? '';
+    }
+    if ($xApiToken && hash_equals(API_TOKEN, trim($xApiToken))) {
+        return true;
     }
     
     // Se não houver token, permite apenas leitura (GET) sem autenticação
@@ -107,7 +115,7 @@ function authenticateRequest() {
  * Útil para hostings que strippeiam headers em modo CGI/FPM.
  */
 function authenticateRequestFlexible() {
-    // 1. Tenta autenticação por header (funciona em modo Apache/mod_php)
+    // 1. Tenta autenticação por header Authorization
     $headers = function_exists('getallheaders') ? getallheaders() : [];
     $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
     if (!$authHeader) {
@@ -120,12 +128,13 @@ function authenticateRequestFlexible() {
         }
     }
     
-    // 2. Tenta autenticação por campo 'api_token' no body JSON
-    $input = json_decode(file_get_contents('php://input'), true);
-    if ($input && isset($input['api_token'])) {
-        if (hash_equals(API_TOKEN, trim($input['api_token']))) {
-            return true;
-        }
+    // 2. Tenta header customizado X-API-Token (CGI-friendly)
+    $xApiToken = $headers['X-API-Token'] ?? $headers['X-Api-Token'] ?? '';
+    if (!$xApiToken) {
+        $xApiToken = $_SERVER['HTTP_X_API_TOKEN'] ?? '';
+    }
+    if ($xApiToken && hash_equals(API_TOKEN, trim($xApiToken))) {
+        return true;
     }
     
     http_response_code(401);

@@ -80,7 +80,7 @@ class ExpedicaoDB {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'X-API-Token': token
             },
             body: JSON.stringify(data)
         });
