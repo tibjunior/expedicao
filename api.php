@@ -358,10 +358,8 @@ switch ($action) {
         break;
 
         case 'bipagem_expedicao':
-        // Endpoint para bipagem de expedição
-        // Autenticação via header Authorization OU via campo 'api_token' no body
-        // (hosting CGI pode strippear headers Authorization)
-        authenticateRequestFlexible();
+        // Endpoint público — proxy para API Tiny
+        // Autenticação com Tiny é feita via token_tiny no body
         try {
             $input = json_decode(file_get_contents('php://input'), true);
             if (!$input) {
