@@ -54,10 +54,25 @@ genérica única).
 - PHP/expedicao: mudança é só de leitura/exibição da resposta já existente,
   sem novo teste automatizado possível além do já coberto por
   `bipagem-utils.test.js` (não muda essa função).
+- 2026-08-20: as 5 tarefas executadas e commitadas.
+  SellInfoTurbo (branch `feat/bipagem-danfe-nota-fiscal`, a partir da
+  main): `d509d00` (schema/client), `85bf15e` (bloqueio + link, 6 testes
+  novos), `8570754` (doc openapi). 971 testes verdes, typecheck limpo.
+  Sem push/merge ainda — decisão de merge fica pra fase validar.
+  expedicao (branch `develop`): `71d597f` (app.js abre 2 abas + mensagem
+  por status), `ab21030` (doc + este plano). `npm test` 7/7 verde.
+  2 correções feitas durante a Tarefa 2 (achadas ao rodar, não eram bug
+  de plano): 3 testes antigos usavam `toEqual` estrito e quebraram com o
+  campo novo `notaFiscalLink` — trocados para `toMatchObject` (testam
+  etiqueta/agrupamento, não nota fiscal, então não deveriam travar nesse
+  campo). E o teste "situacao tipada" do plano precisou de uma checagem
+  de tipo explícita (`const x: number = nota.situacao`) porque
+  `z.looseObject` já fazia passthrough do campo em runtime sem o schema
+  declarar — só o tipo TS estava errado, não o valor.
 
 ---
 
-## Tarefa 1 (SellInfoTurbo): schema + client — situação da nota e link de impressão
+## Tarefa 1 (SellInfoTurbo): schema + client — situação da nota e link de impressão ✅ CONCLUÍDA
 
 - **depende-de**: []
 - **requisito**: pré-requisito técnico dos critérios 1-7 (verificação de
@@ -188,7 +203,7 @@ Passos:
 
 ---
 
-## Tarefa 2 (SellInfoTurbo): bloquear expedição sem nota fiscal válida, anexar link quando disponível
+## Tarefa 2 (SellInfoTurbo): bloquear expedição sem nota fiscal válida, anexar link quando disponível ✅ CONCLUÍDA
 
 - **depende-de**: [Tarefa 1]
 - **requisito**: critérios 1 a 7 da spec de escopo (verificação local +
@@ -716,7 +731,7 @@ Passos:
 
 ---
 
-## Tarefa 3 (SellInfoTurbo): atualizar documentação OpenAPI
+## Tarefa 3 (SellInfoTurbo): atualizar documentação OpenAPI ✅ CONCLUÍDA
 
 - **depende-de**: [Tarefa 2]
 - **requisito**: entregável de documentação — refletir os 3 status novos e
@@ -790,7 +805,7 @@ Passos:
 
 ---
 
-## Tarefa 4 (expedicao): app.js abre a DANFE junto com a etiqueta, trata os novos status
+## Tarefa 4 (expedicao): app.js abre a DANFE junto com a etiqueta, trata os novos status ✅ CONCLUÍDA
 
 - **depende-de**: [Tarefa 2] (via contrato da API — precisa dos campos/status novos existirem do lado SellInfoTurbo)
 - **requisito**: critérios 5, 6, 8 da spec (abrir 2 abas, sucesso parcial
@@ -932,7 +947,7 @@ Passos:
 
 ---
 
-## Tarefa 5 (expedicao): atualizar AI_INSTRUCTIONS.md
+## Tarefa 5 (expedicao): atualizar AI_INSTRUCTIONS.md ✅ CONCLUÍDA
 
 - **depende-de**: [Tarefa 2, Tarefa 4]
 - **requisito**: entregável de documentação — a doc precisa refletir o

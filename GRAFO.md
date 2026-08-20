@@ -75,6 +75,11 @@ pedidos e emitir etiquetas no Tiny ERP automaticamente.
     separada (não combina num PDF único).
   - 2026-08-20 (humano): só o fluxo de bipagem individual já em uso —
     `bipagerExpedicao` (código morto, sem chamador) fica fora.
+  - 2026-08-20: 5 tarefas do plano concluídas. SellInfoTurbo branch
+    `feat/bipagem-danfe-nota-fiscal` (commits `d509d00`, `85bf15e`,
+    `8570754`; sem push/merge ainda). expedicao branch `develop`
+    (commits `71d597f`, `ab21030`). 971 testes verdes no SellInfoTurbo,
+    typecheck limpo; `npm test` 7/7 no expedicao. Ver plano para detalhe.
 - **delta**:
 - **e2e**: pendente
 - **feedback-reprovacao**:
