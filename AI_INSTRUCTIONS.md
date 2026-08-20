@@ -389,75 +389,85 @@ git push origin main
 
 ---
 
-## 10. Plano Futuro: Integração Tiny — Impressão de Etiquetas
+## 10. Integração Bipagem — SellInfoTurbo / Tiny ERP
 
-**Status:** 📋 Planejado (aguardando informações do usuário)
+**Status:** ✅ Implementado (commit `e9912a7` + correções de
+2026-08-19 — ver nó `bipagem-tiny-sellinfo` em `GRAFO.md`)
 
 ### Visão Geral
- automatizar a impressão de etiquetas de envio sempre que um pedido for **conferido e expedido**. O sistema deverá consultar a API do Tiny ERP para gerar a etiqueta correspondente ao número do pedido.
 
-### Funcionamento Esperado
-1. Quando um item for bipado e **marcado como expedido** (em `processBarcodeRead()`)
-2. O sistema identifica o **número do pedido** pelo campo `ec` (extraído do PDF)
-3. Dispara uma requisição para o **endpoint da API Tiny** (configurado no popup de configurações)
-4. Abre o PDF da etiqueta retornado em uma nova aba para impressão
+Ao expedir um item (bipagem, conferência manual ou conferência sem EAN),
+o sistema dispara automaticamente a expedição do pedido e a geração de
+etiqueta via API de bipagem do projeto **SellInfoTurbo**, que por sua vez
+fala com o Tiny ERP.
 
-### Campos de Configuração Necessários (Popup ⚙️)
-
-No menu popup de configurações, adicionar:
-
-1. **Endereço do Endpoint Tiny** (input text)
-   - Onde colar a URL do endpoint fornecido pelo Tiny
-   - Exemplo: `https://api.tiny.com.br/api2/gerar_etiqueta.php`
-
-2. **API Token do Tiny** (input password)
-   - Token de autenticação da API do Tiny ERP
-   - Deve ser armazenado no `localStorage` criptografado (se possível)
-
-3. **Toggle Ativar Impressão Automática** (checkbox)
-   - Ativa/desativa a funcionalidade
-   - Padrão: desativado
-
-### Fluxo Técnico
+### Fluxo real
 
 ```
-processBarcodeRead() 
-    ↓ (item expedido com sucesso)
-identificarPedido() 
-    ↓ (busca campo `ec` do item)
-solicitarEtiquetaTiny(numeroPedido)
-    ↓ (fetch POST para endpoint Tiny)
-respostaTiny()
-    ↓ (processa retorno: PDF base64 ou URL)
-abrirEtiqueta(blobPdf)
+Item vira "expedido" (processBarcodeRead / manualAddUnit / confirmNoEanYes)
+    ↓
+tinyEnviarEtiqueta(item)  — só dispara se expedicao_tiny_enabled='1' ou modo mock
+    ↓
+solicitarEtiquetaTiny(item.ec, cnpjDaLoja)
+    ↓ normalizarIdentificadorPedido(item.ec)  [bipagem-utils.js]
+    ↓ (dedup via tinyPrintedOrders)
+bipagerFetch() → POST api.php?action=bipagem_expedicao  (proxy, evita CORS)
+    ↓ (server-side, cURL)
+POST https://dashvturbo.kn8x.com.br/api/bipagem/expedicao
+    Authorization: Bearer <token do localStorage ou BIPAGEM_API_KEY do servidor>
+    body: { pedidos: ["<Nº EC do PDF>"], cnpj }
+    ↓
+SellInfoTurbo resolve o pedido por numeroPedidoEcommerce, expede no Tiny,
+devolve { agrupamentos, etiquetas, pedidos: [{ numero, status, detalhe }] }
+    ↓
+Etiqueta(s) abrem em nova aba; toast de sucesso/erro conforme status
 ```
 
-### Considerações Técnicas
+### Identificador do pedido — ponto crítico
 
-- **Número do pedido:** Campo `ec` do item no IndexedDB — formatos variam por plataforma (Shopee, MercadoLivre/Transportadora, Amazon, Magalu)
-- **Disparo único:** Verificar se a etiqueta já foi solicitada para aquele pedido antes de repetir (evitar duplicatas)
-- **Formato de retorno:** Aguardando definição — pode ser PDF em base64, URL temporária, ou outro formato
-- **Tratamento de erros:** Se a API Tiny falhar, não bloquear o fluxo de expedição — apenas logar o erro e notificar o operador via toast
+O campo `ec` extraído do PDF (regex `Nº\s+EC\s+(\S+)` em
+`pdf-parser.js`) é o número do pedido **na plataforma de venda**, nunca o
+número interno do Tiny. Formato varia por canal (exemplos reais de
+`teste.pdf`):
 
-### Status das Respostas do Usuário
+| Canal | Nº EC |
+|---|---|
+| Mercado Livre | `2000013866459793` |
+| Shopee | `26070606BSBAKE` |
+| Magalu | `LU-1550370116151430` |
+| Amazon | `702-9802415-7265855` |
+| TikTok Shop | `584878309630969099` |
 
-| Campo | Valor | Status |
-|-------|-------|--------|
-| Endpoint | A ser fornecido pelo usuário | ⏳ Aguardando |
-| API Token | A ser fornecido pelo usuário | ⏳ Aguardando |
-| Formato de retorno | A ser confirmado (base64/URL?) | ❓ Não informado |
-| CPF/CNPJ necessário | Não informado | ❓ Não informado |
-| Chave de acesso | Não informado | ❓ Não informado |
+Por isso o app **nunca** converte esse valor para inteiro — sempre manda
+como string (`normalizarIdentificadorPedido`), e o SellInfoTurbo resolve
+pelo campo `numeroPedidoEcommerce` (não pelo número interno do Tiny).
 
-### Próximos Passos (quando o usuário fornecer as informações)
+### Configuração necessária (popup ⚙️ de configurações)
 
-1. Adicionar campos de configuração no popup de configurações (HTML + CSS)
-2. Criar função `solicitarEtiquetaTiny(numeroPedido, token, endpoint)`
-3. Implementar lógica de deduplicação (evitar múltiplas requisições por mesmo pedido)
-4. Integrar no fluxo de expedição (`processBarcodeRead`)
-5. Adicionar tratamento de erros e feedback ao operador
-6. Testar com cada plataforma (Shopee, ML, Amazon, Magalu)
+1. **Ativar impressão automática** (`popup-config-tiny-enabled`) — sem
+   isso, `tinyEnviarEtiqueta` nunca dispara chamada nenhuma (fica só um
+   log `🐞` no console, sem toast de erro — pegadinha comum ao depurar).
+2. **Token** (`popup-tiny-token`) — a `BIPAGEM_API_KEY` do SellInfoTurbo.
+   Opcional se o servidor tiver a env/arquivo de config (ver abaixo).
+3. **Modo simulação** (`popup-config-bipagem-mock`) — não chama a API
+   real, útil para testar o fluxo sem tocar produção.
+
+### Ação manual pendente em produção (HostGator)
+
+`api.php` não tem mais nenhuma chave hardcoded. Sem token do operador e
+sem `BIPAGEM_API_KEY` configurada no servidor, a bipagem responde 401.
+Configure UMA das duas opções no servidor de produção:
+
+- Variável de ambiente `BIPAGEM_API_KEY` (se o hosting suportar `SetEnv`
+  no `.htaccess` ou painel), OU
+- Arquivo `bipagem-config.php` **fora da pasta pública** (irmão de
+  `../expedicao.db`), com `<?php return ['BIPAGEM_API_KEY' =>
+  'SUA_CHAVE'];`.
+
+A chave anterior (hardcoded no commit `e9912a7`, removida do código nesta
+correção) era uma chave real de produção — o humano é responsável por
+rotacioná-la no SellInfoTurbo separadamente.
 
 ---
 
-*Documento gerado em 20/07/2026 · Última atualização: 21/07/2026 16:13 · Mantenha atualizado com cada nova funcionalidade*
+*Documento gerado em 20/07/2026 · Última atualização: 19/08/2026 · Mantenha atualizado com cada nova funcionalidade*
