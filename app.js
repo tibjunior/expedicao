@@ -4676,6 +4676,22 @@ function tinyEnviarEtiqueta(item) {
     }
 }
 
+// Mensagem específica por status de bloqueio — nunca uma genérica única
+// (decisão do escopo da demanda bipagem-danfe-nota-fiscal).
+function mensagemDoStatusBipagem(status, detalhe) {
+    const sufixo = detalhe ? ` (${detalhe})` : '';
+    switch (status) {
+        case 'sem_nota_fiscal':
+            return `Pedido sem nota fiscal emitida no Tiny — expedição bloqueada até a nota ser gerada${sufixo}.`;
+        case 'nota_fiscal_cancelada':
+            return `Nota fiscal do pedido está cancelada — expedição bloqueada${sufixo}.`;
+        case 'erro_verificacao_nota_fiscal':
+            return `Não foi possível verificar a nota fiscal do pedido — tente novamente${sufixo}.`;
+        default:
+            return `${status}${detalhe ? ' — ' + detalhe : ''}`;
+    }
+}
+
 async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
     const token = localStorage.getItem('expedicao_tiny_token') || '';
     const mockMode = localStorage.getItem('expedicao_bipagem_mock') === '1';
@@ -4733,7 +4749,7 @@ async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
             // 422/400 podem trazer o detalhe por pedido no corpo
             if (data && Array.isArray(data.pedidos) && data.pedidos.length) {
                 const p = data.pedidos[0];
-                throw new Error(`${p.status}${p.detalhe ? ' — ' + p.detalhe : ''}`);
+                throw new Error(mensagemDoStatusBipagem(p.status, p.detalhe));
             }
             // data.issues típico de validação de body (400)
             if (data && Array.isArray(data.issues) && data.issues.length) {
@@ -4741,23 +4757,30 @@ async function solicitarEtiquetaTiny(numeroPedido, cnpj) {
             }
             throw new Error((data && data.message) ? data.message : `Erro HTTP: ${response.status}`);
         }
-        
+
         const etiquetas = (data && Array.isArray(data.etiquetas)) ? data.etiquetas : [];
-        
-        if (etiquetas.length > 0) {
-            console.log('🐞 [Tiny] ✅ ETIQUETA RECEBIDA:', etiquetas.length, '→', etiquetas);
+        const pedidoResultado = (data && Array.isArray(data.pedidos) && data.pedidos.length) ? data.pedidos[0] : null;
+        const notaFiscalLink = pedidoResultado && pedidoResultado.notaFiscalLink;
+        const notaFiscalIndisponivel = pedidoResultado && pedidoResultado.notaFiscalIndisponivel;
+
+        if (etiquetas.length > 0 || notaFiscalLink) {
+            console.log('🐞 [Tiny] ✅ ETIQUETA/NOTA RECEBIDA:', etiquetas.length, 'etiqueta(s),', notaFiscalLink ? '1 nota' : '0 nota');
             etiquetas.forEach(url => {
                 if (url) window.open(url, '_blank');
             });
+            if (notaFiscalLink) {
+                window.open(notaFiscalLink, '_blank');
+            }
             tinyPrintedOrders.add(pedidoId);
-            showToast('Etiqueta Gerada', `Etiqueta do pedido ${pedidoId} aberta para impressão!`, 'success');
-        } else if (data && Array.isArray(data.pedidos) && data.pedidos.length) {
-            const p = data.pedidos[0];
+            const avisoNota = notaFiscalIndisponivel ? ` Nota fiscal indisponível: ${notaFiscalIndisponivel}.` : '';
+            showToast('Etiqueta Gerada', `Etiqueta do pedido ${pedidoId} aberta para impressão!${avisoNota}`, notaFiscalIndisponivel ? 'warning' : 'success');
+        } else if (pedidoResultado) {
             // Pedido expedido, mas a etiqueta não pôde ser retornada
             tinyPrintedOrders.add(pedidoId);
-            const motivo = p && p.detalhe ? `: ${p.detalhe}` : '';
-            showToast('Pedido Expedido', `Pedido ${pedidoId} expedido${motivo}.`, p && p.status === 'expedido' ? 'success' : 'error');
-            console.warn('🐞 [Tiny] ⚠️ Pedido expedido SEM etiqueta. status:', p && p.status, '| detalhe:', p && p.detalhe);
+            const motivo = pedidoResultado.detalhe ? `: ${pedidoResultado.detalhe}` : '';
+            const avisoNota = notaFiscalIndisponivel ? ` Nota fiscal indisponível: ${notaFiscalIndisponivel}.` : '';
+            showToast('Pedido Expedido', `Pedido ${pedidoId} expedido${motivo}.${avisoNota}`, pedidoResultado.status === 'expedido' ? 'success' : 'error');
+            console.warn('🐞 [Tiny] ⚠️ Pedido expedido SEM etiqueta/nota. status:', pedidoResultado.status, '| detalhe:', pedidoResultado.detalhe);
         } else {
             throw new Error('Nenhuma etiqueta retornada pela API');
         }
