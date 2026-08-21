@@ -16,7 +16,7 @@ console.log('🐞 Versão da aplicação carregada:', 'v' + APP_VERSION);
 class ExpedicaoDB {
     constructor() {
         this.dbName = 'ExpedicaoWMS';
-        this.dbVersion = 2;
+        this.dbVersion = 3;
         this.db = null;
         // Detecta se está em localhost ou abrindo o arquivo direto
         this.isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
@@ -67,6 +67,13 @@ class ExpedicaoDB {
                 if (!db.objectStoreNames.contains('lojas')) {
                     const lojasStore = db.createObjectStore('lojas', { keyPath: 'id', autoIncrement: true });
                     lojasStore.createIndex('nome', 'nome', { unique: false });
+                }
+
+                // Tabela Etiquetas de Envio (upload de PDF/ZPL)
+                if (!db.objectStoreNames.contains('etiquetas')) {
+                    const etiquetasStore = db.createObjectStore('etiquetas', { keyPath: 'id', autoIncrement: true });
+                    etiquetasStore.createIndex('despachante_id', 'despachante_id', { unique: false });
+                    etiquetasStore.createIndex('ec', 'ec', { unique: false });
                 }
             };
         });
@@ -505,6 +512,144 @@ class ExpedicaoDB {
             }
         });
     }
+
+    // ===== Etiquetas de Envio (upload PDF/ZPL) =====
+    addEtiqueta(despachanteId, ec, tipo, conteudo, arquivoOrigem) {
+        if (!this.isLocal) {
+            return this.apiPost('upload_etiqueta', {
+                despachante_id: despachanteId, ec, tipo, conteudo, arquivo_origem: arquivoOrigem || ''
+            }).then(res => parseInt(res.id, 10));
+        }
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['etiquetas'], 'readwrite');
+            const store = transaction.objectStore('etiquetas');
+            const etiqueta = {
+                despachante_id: despachanteId,
+                ec: ec || '',
+                tipo: tipo,
+                conteudo: conteudo,
+                arquivo_origem: arquivoOrigem || '',
+                data_upload: new Date().toISOString(),
+                impressa: 0
+            };
+            const request = store.add(etiqueta);
+            request.onsuccess = (e) => resolve(e.target.result);
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    getEtiquetasByDespachante(despachanteId) {
+        if (!this.isLocal) {
+            return this.apiGet('get_etiquetas', { despachante_id: despachanteId })
+                .then(list => (list || []).map(e => { e.id = parseInt(e.id, 10); return e; }));
+        }
+        return new Promise((resolve, reject) => {
+            if (!this.db) return resolve([]);
+            const transaction = this.db.transaction(['etiquetas'], 'readonly');
+            const store = transaction.objectStore('etiquetas');
+            const index = store.index('despachante_id');
+            const request = index.getAll(IDBKeyRange.only(despachanteId));
+            request.onsuccess = (e) => resolve(e.target.result || []);
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    getEtiquetaByEc(despachanteId, ec) {
+        if (!this.isLocal) {
+            return this.apiGet('get_etiqueta_by_ec', { despachante_id: despachanteId, ec })
+                .then(e => e && e.id ? { ...e, id: parseInt(e.id, 10) } : null);
+        }
+        return new Promise((resolve, reject) => {
+            if (!this.db) return resolve(null);
+            const transaction = this.db.transaction(['etiquetas'], 'readonly');
+            const store = transaction.objectStore('etiquetas');
+            const index = store.index('despachante_id');
+            const request = index.getAll(IDBKeyRange.only(despachanteId));
+            request.onsuccess = (e) => {
+                const all = e.target.result || [];
+                const match = all.find(et => String(et.ec).trim() === String(ec).trim());
+                resolve(match || null);
+            };
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    marcarEtiquetaImpressa(id) {
+        if (!this.isLocal) {
+            return this.apiPost('marcar_etiqueta_impressa', { id });
+        }
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['etiquetas'], 'readwrite');
+            const store = transaction.objectStore('etiquetas');
+            const getReq = store.get(id);
+            getReq.onsuccess = () => {
+                const data = getReq.result;
+                if (data) {
+                    data.impressa = 1;
+                    const putReq = store.put(data);
+                    putReq.onsuccess = () => resolve(true);
+                    putReq.onerror = (e) => reject(e);
+                } else { resolve(false); }
+            };
+            getReq.onerror = (e) => reject(e);
+        });
+    }
+
+    deleteEtiqueta(id) {
+        if (!this.isLocal) {
+            return this.apiPost('delete_etiqueta', { id });
+        }
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['etiquetas'], 'readwrite');
+            const store = transaction.objectStore('etiquetas');
+            const request = store.delete(id);
+            request.onsuccess = () => resolve(true);
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    deleteAllEtiquetas(despachanteId) {
+        if (!this.isLocal) {
+            return this.apiPost('delete_all_etiquetas', { despachante_id: despachanteId });
+        }
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['etiquetas'], 'readwrite');
+            const store = transaction.objectStore('etiquetas');
+            const index = store.index('despachante_id');
+            const request = index.getAll(IDBKeyRange.only(despachanteId));
+            request.onsuccess = (e) => {
+                const items = e.target.result || [];
+                items.forEach(item => store.delete(item.id));
+                resolve(true);
+            };
+            request.onerror = (e) => reject(e);
+        });
+    }
+
+    vincularEtiqueta(ec, despachanteId) {
+        if (!this.isLocal) {
+            return this.apiPost('vincular_etiqueta', { ec, despachante_id: despachanteId });
+        }
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['etiquetas'], 'readwrite');
+            const store = transaction.objectStore('etiquetas');
+            const index = store.index('despachante_id');
+            const request = index.getAll(IDBKeyRange.only(despachanteId));
+            request.onsuccess = (e) => {
+                const all = e.target.result || [];
+                const orphan = all.find(et => !et.ec || et.ec === '');
+                if (orphan) {
+                    orphan.ec = ec;
+                    const putReq = store.put(orphan);
+                    putReq.onsuccess = () => resolve(true);
+                    putReq.onerror = (err) => reject(err);
+                } else {
+                    resolve(false);
+                }
+            };
+            request.onerror = (e) => reject(e);
+        });
+    }
 }
 
 // Inicializa a instância do banco de dados
@@ -617,6 +762,9 @@ function initElements() {
     elements.etiquetaPreviewEcText = document.getElementById('etiqueta-preview-ec');
     elements.etiquetaPreviewBody = document.getElementById('etiqueta-preview-body');
     elements.etiquetaPreviewAutoPrint = document.getElementById('etiqueta-preview-auto-print');
+    
+    // Upload de Etiquetas de Envio
+    elements.etiquetasUploadCard = document.getElementById('etiquetas-upload-card');
     
     // Perfil Sonoro
     elements.soundProfileSelect = document.getElementById('sound-profile-select');
@@ -2520,6 +2668,7 @@ async function loadDespachanteData(id) {
         elements.emptyState.style.display = 'flex';
         elements.tableContainer.style.display = 'none';
         elements.despachanteStatusInfo.style.display = 'none';
+        if (elements.etiquetasUploadCard) elements.etiquetasUploadCard.style.display = 'none';
         
         stopCameraScanner();
         stopBackgroundSync();
@@ -2564,6 +2713,11 @@ async function loadDespachanteData(id) {
         renderTable();
         updateProgress();
         renderLogs();
+        
+        // Carrega etiquetas de envio vinculadas ao despachante
+        if (typeof refreshLabelUploadState === 'function') {
+            await refreshLabelUploadState();
+        }
         
         // Inicia sincronização automática em background
         startBackgroundSync();
@@ -4927,17 +5081,22 @@ async function procesarPedidoCompletado(ec, cnpj, itemActivador) {
         return { ok: true, esperandoGrupo: true };
     }
     await setEstadoAguardandoEtiqueta(ec, true);
-    const res = await solicitarEtiquetaTiny(ec, cnpj);
-    if (res.ok) {
-        await marcarGrupoPedidoExpedido(ec);
-        await mostrarEtiquetasRecibidas(res, ec);
-        return res;
-    } else {
+
+    // Busca etiqueta local (upload de PDF/ZPL pelo operador)
+    const etiquetaLocal = await buscarEtiquetaLocal(ec);
+    if (etiquetaLocal && etiquetaLocal.ok) {
         await setEstadoAguardandoEtiqueta(ec, false);
-        agregarPendienteEtiqueta(ec, res.error, itemActivador ? itemActivador.id : null);
-        await mostrarModalErrorEtiqueta(res.error, ec);
-        return res;
+        await marcarGrupoPedidoExpedido(ec);
+        await imprimirEtiquetaArmazenada(etiquetaLocal.etiqueta);
+        return etiquetaLocal;
     }
+
+    // Sem etiqueta local encontrada
+    await setEstadoAguardandoEtiqueta(ec, false);
+    const msgErro = `Nenhuma etiqueta encontrada para o pedido ${ec}. Faça upload das etiquetas antes de expedir.`;
+    agregarPendienteEtiqueta(ec, msgErro, itemActivador ? itemActivador.id : null);
+    await mostrarModalErrorEtiqueta(msgErro, ec);
+    return { ok: false, etiquetas: [], error: msgErro };
 }
 
 // Marca todos los items del mismo pedido(ec) como expedidos
@@ -4979,6 +5138,105 @@ async function setEstadoAguardandoEtiqueta(ec, activo) {
         elements.etiquetaEsperandoInd.style.display = etiquetasEsperando.size ? 'flex' : 'none';
         if (elements.etiquetaEsperandoCount) elements.etiquetaEsperandoCount.textContent = String(etiquetasEsperando.size);
     }
+}
+
+// -------------------------------------------------------
+// 9.20.6. ETIQUETAS LOCAIS — busca e impressão
+// -------------------------------------------------------
+async function buscarEtiquetaLocal(ec) {
+    if (!ec || !state.activeDespachanteId) return null;
+    try {
+        const etiqueta = await db.getEtiquetaByEc(state.activeDespachanteId, ec);
+        if (etiqueta) {
+            return { ok: true, etiqueta, local: true };
+        }
+    } catch (e) {
+        console.error('Erro ao buscar etiqueta local:', e);
+    }
+    return null;
+}
+
+async function imprimirEtiquetaArmazenada(etiqueta) {
+    if (!etiqueta) return;
+    const printerConfig = getPrinterConfig();
+
+    if (etiqueta.tipo === 'zpl' && printerConfig && printerConfig.type === 'tcp') {
+        // ZPL direto para impressora via print server
+        try {
+            const response = await fetch('http://localhost:9200/print', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ zpl: etiqueta.conteudo, printer: printerConfig.name })
+            });
+            if (response.ok) {
+                await db.marcarEtiquetaImpressa(etiqueta.id);
+                showToast('Etiqueta Impressa', `Enviada para ${printerConfig.name}`, 'success');
+                return;
+            }
+        } catch (e) {
+            console.warn('Print server indisponível, usando fallback browser:', e);
+        }
+    }
+
+    if (etiqueta.tipo === 'pdf') {
+        const printWindow = window.open('', '_blank', 'width=420,height=600');
+        printWindow.document.write(`<!DOCTYPE html><html><head><style>
+            body{margin:0;padding:0;background:#fff;}
+            @page{size:100mm 150mm;margin:3mm;}
+            @media print{body{margin:0;padding:0;}iframe{border:none;width:100mm;height:150mm;}}
+        </style></head><body>
+            <iframe src="data:application/pdf;base64,${etiqueta.conteudo}" style="width:100mm;height:150mm;border:none;"></iframe>
+            <script>window.onload=function(){setTimeout(function(){window.print();},500);}<\/script>
+        </body></html>`);
+        printWindow.document.close();
+    } else if (etiqueta.tipo === 'zpl') {
+        const printWindow = window.open('', '_blank', 'width=420,height=600');
+        printWindow.document.write(`<!DOCTYPE html><html><head><style>
+            body{font-family:'Courier New',monospace;font-size:10px;white-space:pre;padding:10px;background:#fff;}
+            @page{size:100mm 150mm;margin:3mm;}
+        </style></head><body><pre>${escHtml(etiqueta.conteudo)}</pre>
+            <script>window.onload=function(){window.print();}<\/script>
+        </body></html>`);
+        printWindow.document.close();
+    }
+
+    await db.marcarEtiquetaImpressa(etiqueta.id);
+}
+
+function getPrinterConfig() {
+    try {
+        const printers = JSON.parse(localStorage.getItem('expedicao_printers') || '[]');
+        const defaultName = localStorage.getItem('expedicao_default_printer') || '';
+        if (printers.length === 0) return null;
+        const def = printers.find(p => p.name === defaultName) || printers[0];
+        return def;
+    } catch (e) { return null; }
+}
+
+// Função para imprimir etiqueta por ec (chamada da tabela de bipagem)
+async function imprimirEtiquetaPorEc(ec) {
+    if (!ec || !state.activeDespachanteId) return;
+    const etiqueta = await db.getEtiquetaByEc(state.activeDespachanteId, ec);
+    if (etiqueta) {
+        await imprimirEtiquetaArmazenada(etiqueta);
+    } else {
+        showToast('Sem Etiqueta', `Nenhuma etiqueta vinculada ao pedido ${ec}.`, 'warning');
+    }
+}
+
+// Busca etiquetas para todos os pedidos do despachante (pré-bipagem)
+async function buscarEtiquetasParaDespachante(despachanteId, items) {
+    if (!despachanteId || !items || items.length === 0) return { vinculadas: 0, pendentes: 0, pedidos: [] };
+    const ecsUnicos = [...new Set(items.map(i => String(i.ec).trim()).filter(ec => ec && ec !== 'Sem Pedido'))];
+    const etiquetas = await db.getEtiquetasByDespachante(despachanteId);
+    let vinculadas = 0;
+    let pendentes = 0;
+    const pedidos = ecsUnicos.map(ec => {
+        const found = etiquetas.find(e => String(e.ec).trim() === ec);
+        if (found) vinculadas++; else pendentes++;
+        return { ec, temEtiqueta: !!found, etiqueta: found || null };
+    });
+    return { vinculadas, pendentes, pedidos, total: ecsUnicos.length };
 }
 
 // ---------- Helpers de apertura / impression / modal de preview ----------
@@ -5690,6 +5948,106 @@ function initSettingsPopup() {
     }
     
     renderLojasList();
+
+    // ===== Cadastro de Impressoras =====
+    const popupPrinterNome = document.getElementById('popup-printer-nome');
+    const popupPrinterTipo = document.getElementById('popup-printer-tipo');
+    const popupPrinterIp = document.getElementById('popup-printer-ip');
+    const popupPrinterPort = document.getElementById('popup-printer-port');
+    const popupPrinterDefault = document.getElementById('popup-printer-default');
+    const btnAddPrinter = document.getElementById('btn-add-printer');
+    const printersListEl = document.getElementById('printers-list');
+    const printerTcpFields = document.getElementById('printer-tcp-fields');
+
+    function getPrinters() {
+        try { return JSON.parse(localStorage.getItem('expedicao_printers') || '[]'); } catch (e) { return []; }
+    }
+    function savePrinters(list) {
+        localStorage.setItem('expedicao_printers', JSON.stringify(list));
+    }
+
+    if (popupPrinterTipo) {
+        popupPrinterTipo.addEventListener('change', () => {
+            if (printerTcpFields) printerTcpFields.style.display = popupPrinterTipo.value === 'tcp' ? 'block' : 'none';
+        });
+    }
+
+    async function renderPrintersList() {
+        if (!printersListEl) return;
+        const printers = getPrinters();
+        const defaultName = localStorage.getItem('expedicao_default_printer') || '';
+        if (printers.length === 0) {
+            printersListEl.innerHTML = '<div style="font-size:12px; color:var(--text-muted); padding:4px 0;">Nenhuma impressora cadastrada.</div>';
+            return;
+        }
+        printersListEl.innerHTML = printers.map(p => {
+            const isDefault = p.name === defaultName;
+            const tipoLabel = p.type === 'tcp' ? `TCP ${p.host}:${p.port}` : 'USB';
+            return `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; border:1px solid ${isDefault ? 'var(--accent-color)' : 'var(--border-color)'}; border-radius:6px; margin-bottom:6px; background:rgba(15,23,42,0.3);">
+                <div style="min-width:0;">
+                    <div style="font-size:12px; font-weight:600; color:var(--text-primary);">${escHtml(p.name)}${isDefault ? ' ⭐' : ''}</div>
+                    <div style="font-size:11px; color:var(--text-secondary);">${escHtml(tipoLabel)}</div>
+                </div>
+                <div style="display:flex; gap:4px; flex-shrink:0;">
+                    ${!isDefault ? `<button class="btn btn-outline btn-set-default-printer" data-name="${escHtml(p.name)}" style="padding:3px 8px; font-size:11px; height:auto;">Padrão</button>` : ''}
+                    <button class="btn btn-danger-outline btn-remove-printer" data-name="${escHtml(p.name)}" style="padding:3px 8px; font-size:11px; height:auto;">Remover</button>
+                </div>
+            </div>`;
+        }).join('');
+
+        printersListEl.querySelectorAll('.btn-remove-printer').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const name = btn.getAttribute('data-name');
+                if (confirm(`Remover impressora "${name}"?`)) {
+                    const list = getPrinters().filter(p => p.name !== name);
+                    savePrinters(list);
+                    if (localStorage.getItem('expedicao_default_printer') === name) {
+                        localStorage.setItem('expedicao_default_printer', list.length ? list[0].name : '');
+                    }
+                    renderPrintersList();
+                    showToast('Impressora Removida', `"${name}" removida.`, 'success');
+                }
+            });
+        });
+
+        printersListEl.querySelectorAll('.btn-set-default-printer').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const name = btn.getAttribute('data-name');
+                localStorage.setItem('expedicao_default_printer', name);
+                renderPrintersList();
+                showToast('Padrão Alterado', `"${name}" definida como impressora padrão.`, 'success');
+            });
+        });
+    }
+
+    if (btnAddPrinter) {
+        btnAddPrinter.addEventListener('click', () => {
+            const nome = popupPrinterNome.value.trim();
+            const tipo = popupPrinterTipo.value;
+            if (!nome) { showToast('Nome Requerido', 'Informe o nome da impressora.', 'error'); return; }
+            const printers = getPrinters();
+            if (printers.some(p => p.name === nome)) { showToast('Duplicada', 'Já existe uma impressora com esse nome.', 'error'); return; }
+            const printer = { name: nome, type: tipo };
+            if (tipo === 'tcp') {
+                printer.host = popupPrinterIp.value.trim();
+                printer.port = parseInt(popupPrinterPort.value, 10) || 9100;
+                if (!printer.host) { showToast('IP Requerido', 'Informe o IP da impressora.', 'error'); return; }
+            }
+            printers.push(printer);
+            savePrinters(printers);
+            if (!localStorage.getItem('expedicao_default_printer')) {
+                localStorage.setItem('expedicao_default_printer', nome);
+            }
+            popupPrinterNome.value = '';
+            popupPrinterIp.value = '';
+            popupPrinterPort.value = '9100';
+            popupPrinterDefault.checked = false;
+            renderPrintersList();
+            showToast('Impressora Adicionada', `"${nome}" cadastrada com sucesso.`, 'success');
+        });
+    }
+
+    renderPrintersList();
 }
 
 function applySettingsFromPopup() {
@@ -5736,6 +6094,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initSettingsPopup();
     if (typeof initEtiquetasUI === 'function') initEtiquetasUI();
+    if (typeof initLabelUpload === 'function') initLabelUpload();
 });
 
 // Expõe globais da integração de etiquetas para o etiquetas-ui.js

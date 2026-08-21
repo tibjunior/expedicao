@@ -875,17 +875,21 @@ async function imprimirEtiquetaPorEc(ec) {
 ## 10. Fluxo Completo (Happy Path)
 
 ```
-1. Operador cria despachante (nome + prazo + loja)
-2. Operador faz upload do PDF de vendas Tiny → itens são importados
-3. Operador baixa etiquetas do marketplace (PDF ou ZPL)
-4. Operador faz upload das etiquetas na seção "Etiquetas de Envio"
-5. Sistema separa por página/bloco, extrai ec, vincula aos pedidos
-6. Operador bipe os produtos (fluxo normal)
-7. Quando o último produto de um pedido é bipado:
-   a. Sistema busca etiqueta local → encontrou → imprime na Zebra
-   b. Se não encontrou → fallback para API Tiny
-8. Operador pode re-imprimir a qualquer momento via ícone 🖨️ na tabela
+1. Operador cadastra impressoras nas Configurações (Nome + IP/Porta)
+2. Operador cria despachante (nome + prazo + loja)
+3. Operador faz upload do PDF de vendas → itens são importados
+4. Operador baixa etiquetas do marketplace (PDF ou ZPL)
+5. Operador faz upload das etiquetas na seção "Etiquetas de Envio"
+6. Sistema separa por página/bloco, extrai ec, vincula aos pedidos automaticamente
+7. Etiquetas sem matching → dropdown para vinculação manual
+8. Operador bipe os produtos (fluxo normal)
+9. Quando o último produto de um pedido é bipado:
+   a. Sistema busca etiqueta local → encontrou → imprime na impressora configurada
+   b. Se não encontrou →Toast de erro: "Faça upload das etiquetas antes de expedir"
+10. Operador pode re-imprimir a qualquer momento via ícone 🖨️ na tabela
 ```
+
+**Nota:** A API do Tiny não é mais utilizada para etiquetas. O sistema funciona exclusivamente com upload manual de etiquetas.
 
 ---
 
@@ -910,3 +914,34 @@ async function imprimirEtiquetaPorEc(ec) {
 - **Modo remoto**: SQLite via api.php (HostGator)
 - **Print server**: Node.js 14+ (Windows/Linux)
 - **Impressoras**: Zebra ZD230 (TCP/IP), Zebra ZD220 (USB), qualquer impressora configurada no OS (browser print)
+
+---
+
+## 13. Alterações Implementadas
+
+### 13.1 Removido: Fallback Tiny API
+- A função `procesarPedidoCompletado()` não chama mais `solicitarEtiquetaTiny()`
+- Se não houver etiqueta local, mostra toast de erro orientando o operador a fazer upload
+- A API do Tiny continua disponível para outros usos, mas não para etiquetas
+
+### 13.2 Adicionado: Gerenciamento de Impressoras
+- Seção "🖨️ Impressoras" no popup de Configurações
+- Cadastro de impressoras com nome, tipo (TCP/USB), IP e porta
+- Definição de impressora padrão
+- Remoção de impressoras
+- Configuração persistida em `localStorage`
+
+### 13.3 Adicionado: Busca de Etiquetas Antes da Expedição
+- Ao selecionar despachante, o sistema carrega e exibe status das etiquetas
+- Função `buscarEtiquetasParaDespachante()` verifica quais pedidos têm etiqueta
+- UI mostra resumo: ✅ vinculadas, ⚠️ órfãs, 🖨️ impressas
+- Dropdown manual para vincular etiquetas órfãs a pedidos
+
+### 13.4 Arquivos Criados/Modificados
+| Arquivo | Ação |
+|---------|------|
+| `app.js` | Modificado — DB v3, métodos etiquetas, remover fallback Tiny, impressão local |
+| `label-upload.js` | **Criado** — Upload, splitting PDF/ZPL, matching, UI |
+| `index.html` | Modificado — UI upload etiquetas, seção impressoras |
+| `index.css` | Modificado — Estilos para etiquetas |
+| `PLANO_ETIQUETAS.md` | Modificado — Documentação atualizada |

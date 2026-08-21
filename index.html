@@ -158,6 +158,31 @@
                             <button class="btn btn-primary" id="btn-add-loja" style="width: 100%; padding: 8px; font-size: 12px;">+ Adicionar Loja</button>
                         </div>
                         <div id="lojas-list" style="margin-top: 10px;"></div>
+                        
+                        <!-- Cadastro de Impressoras -->
+                        <div class="settings-section-title" style="margin-top: 18px;">🖨️ Impressoras</div>
+                        <div style="margin: 8px 0 0 0;">
+                            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Nome da Impressora</label>
+                            <input type="text" id="popup-printer-nome" class="input-despachante" placeholder="Ex: Zebra ZD230" style="font-size: 12px; margin-bottom: 8px;">
+                            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Tipo</label>
+                            <select id="popup-printer-tipo" class="input-despachante" style="font-size: 12px; margin-bottom: 8px;">
+                                <option value="tcp">Rede (TCP/IP)</option>
+                                <option value="usb">USB (Browser Print)</option>
+                            </select>
+                            <div id="printer-tcp-fields">
+                                <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">IP da Impressora</label>
+                                <input type="text" id="popup-printer-ip" class="input-despachante" placeholder="Ex: 192.168.1.210" style="font-size: 12px; margin-bottom: 8px;">
+                                <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Porta</label>
+                                <input type="number" id="popup-printer-port" class="input-despachante" placeholder="9100" value="9100" style="font-size: 12px; margin-bottom: 8px;">
+                            </div>
+                            <label class="config-toggle" style="font-size: 11px; margin-bottom: 8px;">
+                                <input type="checkbox" id="popup-printer-default">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label">Padrão</span>
+                            </label>
+                            <button class="btn btn-primary" id="btn-add-printer" style="width: 100%; padding: 8px; font-size: 12px;">+ Adicionar Impressora</button>
+                        </div>
+                        <div id="printers-list" style="margin-top: 10px;"></div>
                     </div>
                 </div>
             </div>
@@ -336,6 +361,37 @@
                             <button class="btn btn-outline w-full" id="btn-load-test" style="margin-top: 12px;" disabled>
                                 🧪 Carregar Modelo de Teste (teste.pdf)
                             </button>
+                        </div>
+
+                        <!-- Upload de Etiquetas de Envio -->
+                        <div class="card glass-card shadow-lg" id="etiquetas-upload-card" style="padding: 20px; display: none; margin-top: 16px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                                <span style="font-size: 20px;">🏷️</span>
+                                <h2 class="card-title" style="margin: 0; font-size: 16px;">Etiquetas de Envio</h2>
+                            </div>
+                            
+                            <div id="etiquetas-summary" style="font-size: 13px; margin-bottom: 12px; display: flex; gap: 12px; flex-wrap: wrap;"></div>
+                            
+                            <div class="drag-drop-area" id="label-drop-area" style="margin-bottom: 12px;">
+                                <span class="upload-icon">🏷️</span>
+                                <p class="upload-text">Arraste PDF ou ZPL de etiquetas aqui ou clique</p>
+                                <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Aceita múltiplos arquivos (.pdf, .zpl)</p>
+                            </div>
+                            <input type="file" id="label-file-input" accept=".pdf,.zpl" multiple style="display: none;">
+                            
+                            <div id="etiquetas-orphans-section" style="display: none;">
+                                <h3 style="font-size: 14px; color: var(--text-warning); margin: 12px 0 8px;">⚠️ Etiquetas sem pedido identificado</h3>
+                                <div id="etiquetas-orphans-list"></div>
+                            </div>
+                            
+                            <div id="etiquetas-linked-section" style="display: none;">
+                                <h3 style="font-size: 14px; color: var(--text-success); margin: 12px 0 8px;">✅ Etiquetas Vinculadas</h3>
+                                <div id="etiquetas-linked-list" style="max-height: 300px; overflow-y: auto;"></div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 8px; margin-top: 12px;">
+                                <button class="btn btn-danger-outline" id="btn-clear-etiquetas" style="font-size: 12px;">🗑️ Limpar Todas</button>
+                            </div>
                         </div>
                     </div>
 
@@ -581,6 +637,7 @@
     <!-- Scripts da aplicacao -->
     <script src="config.js"></script>
     <script src="pdf-parser.js?v=8"></script>
+    <script src="label-upload.js?v=1"></script>
     <script src="app.js?v=12"></script>
     <script src="etiquetas-ui.js?v=1"></script>
 </body>
