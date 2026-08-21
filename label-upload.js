@@ -310,17 +310,7 @@ function renderLabelOrphans() {
             const etiqueta = labelUploadState.etiquetas.find(e => e.id === id);
             if (etiqueta) {
                 etiqueta.ec = ec;
-                // Atualiza no banco
-                const transaction = db.db.transaction(['etiquetas'], 'readwrite');
-                const store = transaction.objectStore('etiquetas');
-                const getReq = store.get(id);
-                getReq.onsuccess = () => {
-                    const data = getReq.result;
-                    if (data) {
-                        data.ec = ec;
-                        store.put(data);
-                    }
-                };
+                await db.updateEtiquetaEc(id, ec);
                 await refreshLabelUploadState();
                 showToast('Vinculada', `Etiqueta vinculada ao pedido ${ec}.`, 'success');
             }

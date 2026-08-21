@@ -650,6 +650,29 @@ class ExpedicaoDB {
             request.onerror = (e) => reject(e);
         });
     }
+
+    updateEtiquetaEc(id, ec) {
+        if (!this.isLocal) {
+            return this.apiPost('update_etiqueta_ec', { id, ec });
+        }
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['etiquetas'], 'readwrite');
+            const store = transaction.objectStore('etiquetas');
+            const getReq = store.get(id);
+            getReq.onsuccess = () => {
+                const data = getReq.result;
+                if (data) {
+                    data.ec = ec;
+                    const putReq = store.put(data);
+                    putReq.onsuccess = () => resolve(true);
+                    putReq.onerror = (err) => reject(err);
+                } else {
+                    resolve(false);
+                }
+            };
+            getReq.onerror = (e) => reject(e);
+        });
+    }
 }
 
 // Inicializa a instância do banco de dados

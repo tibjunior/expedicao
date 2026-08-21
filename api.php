@@ -877,6 +877,21 @@ switch ($action) {
         }
         break;
 
+    case 'update_etiqueta_ec':
+        authenticateRequest();
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $id = intval($input['id'] ?? 0);
+            $ec = sanitize($input['ec'] ?? '');
+            $stmt = $db->prepare("UPDATE etiquetas SET ec = :ec WHERE id = :id");
+            $stmt->execute([':id' => $id, ':ec' => $ec]);
+            echo json_encode(["status" => "ok"]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao atualizar etiqueta."]);
+        }
+        break;
+
     default:
         http_response_code(404);
         echo json_encode(["status" => "error", "message" => "Ação inválida."]);
