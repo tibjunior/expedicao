@@ -218,19 +218,24 @@ async function refreshLabelUploadState() {
         hideLabelUploadUI();
         return;
     }
-    const etiquetas = await db.getEtiquetasByDespachante(state.activeDespachanteId);
-    const itens = state.items || [];
-    const ecsDespachante = [...new Set(itens.map(i => String(i.ec).trim()).filter(ec => ec && ec !== 'Sem Pedido'))];
+    try {
+        const etiquetas = await db.getEtiquetasByDespachante(state.activeDespachanteId);
+        const itens = state.items || [];
+        const ecsDespachante = [...new Set(itens.map(i => String(i.ec).trim()).filter(ec => ec && ec !== 'Sem Pedido'))];
 
-    labelUploadState.etiquetas = etiquetas;
-    labelUploadState.despachanteId = state.activeDespachanteId;
-    labelUploadState.vinculadas = etiquetas.filter(e => e.ec && ecsDespachante.includes(String(e.ec).trim()));
-    labelUploadState.orfas = etiquetas.filter(e => !e.ec || !ecsDespachante.includes(String(e.ec).trim()));
+        labelUploadState.etiquetas = etiquetas || [];
+        labelUploadState.despachanteId = state.activeDespachanteId;
+        labelUploadState.vinculadas = (etiquetas || []).filter(e => e.ec && ecsDespachante.includes(String(e.ec).trim()));
+        labelUploadState.orfas = (etiquetas || []).filter(e => !e.ec || !ecsDespachante.includes(String(e.ec).trim()));
 
-    renderLabelUploadSummary();
-    renderLabelOrphans();
-    renderLabelLinked();
-    showLabelUploadUI();
+        renderLabelUploadSummary();
+        renderLabelOrphans();
+        renderLabelLinked();
+        showLabelUploadUI();
+    } catch (e) {
+        console.warn('Erro ao carregar etiquetas (ignorado):', e.message);
+        hideLabelUploadUI();
+    }
 }
 
 function showLabelUploadUI() {

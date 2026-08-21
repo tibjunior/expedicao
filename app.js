@@ -2716,7 +2716,7 @@ async function loadDespachanteData(id) {
         
         // Carrega etiquetas de envio vinculadas ao despachante
         if (typeof refreshLabelUploadState === 'function') {
-            await refreshLabelUploadState();
+            try { await refreshLabelUploadState(); } catch (e) { console.warn('Etiquetas skip:', e.message); }
         }
         
         // Inicia sincronização automática em background

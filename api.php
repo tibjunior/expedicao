@@ -219,6 +219,17 @@ try {
         nome TEXT NOT NULL,
         cnpj TEXT NOT NULL
     )");
+    
+    $db->exec("CREATE TABLE IF NOT EXISTS etiquetas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        despachante_id INTEGER NOT NULL,
+        ec TEXT,
+        tipo TEXT NOT NULL,
+        conteudo TEXT NOT NULL,
+        arquivo_origem TEXT DEFAULT '',
+        data_upload TEXT NOT NULL,
+        impressa INTEGER DEFAULT 0
+    )");
 } catch (PDOException $e) {
     http_response_code(500);
     echo json_encode(["status" => "error", "message" => "Erro ao criar tabelas."]);
@@ -748,6 +759,121 @@ switch ($action) {
         } catch (PDOException $e) {
             http_response_code(500);
             echo json_encode(["status" => "error", "message" => "Erro ao limpar logs."]);
+        }
+        break;
+
+    // ===== Etiquetas de Envio =====
+    case 'upload_etiqueta':
+        authenticateRequest();
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $despachante_id = intval($input['despachante_id'] ?? 0);
+            $ec = sanitize($input['ec'] ?? '');
+            $tipo = sanitize($input['tipo'] ?? 'pdf');
+            $conteudo = $input['conteudo'] ?? '';
+            $arquivo_origem = sanitize($input['arquivo_origem'] ?? '');
+            
+            $stmt = $db->prepare("INSERT INTO etiquetas 
+                (despachante_id, ec, tipo, conteudo, arquivo_origem, data_upload, impressa) 
+                VALUES (:did, :ec, :tipo, :conteudo, :arquivo, :data, 0)");
+            $stmt->execute([
+                ':did' => $despachante_id,
+                ':ec' => $ec,
+                ':tipo' => $tipo,
+                ':conteudo' => $conteudo,
+                ':arquivo' => $arquivo_origem,
+                ':data' => date('c')
+            ]);
+            echo json_encode(["status" => "ok", "id" => $db->lastInsertId()]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao salvar etiqueta."]);
+        }
+        break;
+
+    case 'get_etiquetas':
+        authenticateRequest();
+        try {
+            $despachante_id = intval($_GET['despachante_id'] ?? 0);
+            $stmt = $db->prepare("SELECT id, despachante_id, ec, tipo, arquivo_origem, data_upload, impressa 
+                FROM etiquetas WHERE despachante_id = :did ORDER BY id");
+            $stmt->execute([':did' => $despachante_id]);
+            echo json_encode($stmt->fetchAll());
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao buscar etiquetas."]);
+        }
+        break;
+
+    case 'get_etiqueta_by_ec':
+        authenticateRequest();
+        try {
+            $despachante_id = intval($_GET['despachante_id'] ?? 0);
+            $ec = sanitize($_GET['ec'] ?? '');
+            $stmt = $db->prepare("SELECT * FROM etiquetas WHERE despachante_id = :did AND ec = :ec LIMIT 1");
+            $stmt->execute([':did' => $despachante_id, ':ec' => $ec]);
+            $row = $stmt->fetch();
+            echo json_encode($row ?: null);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao buscar etiqueta."]);
+        }
+        break;
+
+    case 'marcar_etiqueta_impressa':
+        authenticateRequest();
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $id = intval($input['id'] ?? 0);
+            $stmt = $db->prepare("UPDATE etiquetas SET impressa = 1 WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+            echo json_encode(["status" => "ok"]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao atualizar etiqueta."]);
+        }
+        break;
+
+    case 'delete_etiqueta':
+        authenticateRequest();
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $id = intval($input['id'] ?? 0);
+            $stmt = $db->prepare("DELETE FROM etiquetas WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+            echo json_encode(["status" => "ok"]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao remover etiqueta."]);
+        }
+        break;
+
+    case 'delete_all_etiquetas':
+        authenticateRequest();
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $despachante_id = intval($input['despachante_id'] ?? 0);
+            $stmt = $db->prepare("DELETE FROM etiquetas WHERE despachante_id = :did");
+            $stmt->execute([':did' => $despachante_id]);
+            echo json_encode(["status" => "ok"]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao limpar etiquetas."]);
+        }
+        break;
+
+    case 'vincular_etiqueta':
+        authenticateRequest();
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $despachante_id = intval($input['despachante_id'] ?? 0);
+            $ec = sanitize($input['ec'] ?? '');
+            $stmt = $db->prepare("UPDATE etiquetas SET ec = :ec WHERE despachante_id = :did AND (ec = '' OR ec IS NULL) LIMIT 1");
+            $stmt->execute([':did' => $despachante_id, ':ec' => $ec]);
+            echo json_encode(["status" => "ok"]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao vincular etiqueta."]);
         }
         break;
 
