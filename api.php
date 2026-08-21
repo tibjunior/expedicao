@@ -39,9 +39,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // ==========================================
 // 1.4 - AUTENTICAÇÃO POR TOKEN
 // ==========================================
-// Token definido aqui (em produção, ler de config fora da pasta pública)
+// Token lido de variável de ambiente (getenv) ou do arquivo .env nesta
+// mesma pasta (protegido por .htaccess — ver FilesMatch "\.(env|md|lock|txt)$"
+// mais abaixo no arquivo). Sem fallback hardcoded: falta de configuração
+// vira 401 até alguém configurar, nunca um segredo escondido no código-fonte
+// (mesmo padrão do BIPAGEM_API_KEY, poucas linhas abaixo).
 // Para gerar um token seguro: php -r "echo bin2hex(random_bytes(32));"
-define('API_TOKEN', 'expedicao_api_token_2026_seguro_aqui');
+function lerEnvLocal($chave) {
+    static $env = null;
+    if ($env === null) {
+        $env = [];
+        $envFile = __DIR__ . '/.env';
+        if (file_exists($envFile)) {
+            foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $linha) {
+                $linha = trim($linha);
+                if ($linha === '' || $linha[0] === '#' || strpos($linha, '=') === false) {
+                    continue;
+                }
+                list($k, $v) = explode('=', $linha, 2);
+                $env[trim($k)] = trim($v, " \t\n\r\0\x0B\"'");
+            }
+        }
+    }
+    return $env[$chave] ?? '';
+}
+define('API_TOKEN', getenv('API_TOKEN') ?: lerEnvLocal('API_TOKEN'));
 
 // AÇÃO MANUAL NECESSÁRIA NO SERVIDOR DE PRODUÇÃO (HostGator) para não
 // quebrar a expedição de etiqueta: crie o arquivo

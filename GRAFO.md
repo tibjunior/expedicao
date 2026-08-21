@@ -113,7 +113,11 @@ pedidos e emitir etiquetas no Tiny ERP automaticamente.
 - **criterios-aceite**: ver spec dedicada —
   `docs/audora/specs/bipagem-tiny-sellinfo-escopo.md` (categoria ALTA).
 - **fora-de-escopo**: ver spec dedicada —
-  `docs/audora/specs/bipagem-tiny-sellinfo-escopo.md`.
+  `docs/audora/specs/bipagem-tiny-sellinfo-escopo.md`. Também fora desta
+  demanda (2026-08-20): reconciliar `main`/`develop` locais com os 11
+  commits só existentes em `origin/main` (trabalho de "Tibjunior" direto
+  no remoto) — humano optou por corrigir a partir do estado local e deixar
+  essa divergência de branch para decisão posterior, ver decisão abaixo.
 - **decisoes**:
   - 2026-08-18 (humano): a integração de bipagem já existe (commit
     `e9912a7`, direto na main). Optou por auditar/corrigir essa
@@ -139,6 +143,28 @@ pedidos e emitir etiquetas no Tiny ERP automaticamente.
     `intval` forçado no pedido, `.env`/`.env.example`,
     `AI_INSTRUCTIONS.md` §10 atualizado. As 9 tarefas do plano estão
     concluídas nos dois repositórios.
+  - 2026-08-20 (depuração, sintoma "401 em update_item"): confirmado por
+    curl direto em produção que `api.php` aceitava o token hardcoded
+    antigo (400, não 401) — descartou hipótese de header stripado pelo
+    CGI do HostGator. Investigação de git revelou que `origin/main` está
+    11 commits à frente do `main`/`develop` locais (trabalho de
+    "Tibjunior" direto no remoto, fora deste clone) e que produção roda
+    esse código não rastreado localmente (`app.js?v=12` vs `v=8` local).
+    Causa raiz real: um desses commits (`f8e16e2`) mudou `apiPost()` para
+    ler o token de `CONFIG.API_TOKEN` (`config.js`), mas `config.js` nunca
+    foi commitado nem incluído no whitelist do `deploy.js` em nenhum
+    commit até a ponta de `origin/main` — e não existe fallback de
+    localStorage configurável via UI. Token sempre vazio em produção desde
+    esse deploy. Humano decidiu (a) ignorar `origin/main` e corrigir a
+    partir do estado local (não trouxe os 11 commits — divergência de
+    branch fica em aberto, ver "fora-de-escopo" abaixo) e (b) token vem de
+    `.env` (fail-closed, sem literal no código), `config.js` gerado
+    automaticamente por `deploy.js`/`server.js` a partir do `.env` antes de
+    cada deploy/start (nunca versionado, nunca escrito à mão). Sinal de
+    escalada notado (não seguido à risca por ser infra/config, não lógica
+    de negócio): a sequência de 5+ commits "fix: autenticação..." em
+    `origin/main` tentando remendar isso sem nunca fechar o buraco do
+    `config.js` — padrão de fix que não gruda.
 - **delta**:
   - ADICIONADO (2026-08-19): critérios 0/0.1/0.2 — bipagem deve resolver
     pedido por `numeroPedidoEcommerce` (string), não mais tentar `parseInt`
@@ -153,11 +179,24 @@ pedidos e emitir etiquetas no Tiny ERP automaticamente.
     assim que ela fosse configurada em produção. Humano decidiu corrigir
     nesta mesma demanda: endpoint agora exige `Authorization: Bearer
     <API_TOKEN>` (mesmo token dos demais endpoints de escrita).
+  - ADICIONADO (2026-08-20, achado em depuração de sintoma): `API_TOKEN`
+    do `api.php` também estava hardcoded no código-fonte (mesmo padrão de
+    risco já corrigido para `BIPAGEM_API_KEY`) — corrigido para o mesmo
+    esquema `.env`/`config.js` fail-closed. `.env` e `config.js` entraram
+    no whitelist do `deploy.js`; `sincronizarConfigJs()` (novo, com
+    testes) gera `config.js` a partir do `.env` em todo start/deploy e
+    aborta o deploy se `API_TOKEN` não estiver configurado.
+  - LACUNA DE TESTE (2026-08-20): projeto não tinha nenhum teste cobrindo
+    `deploy.js` (script de deploy nunca testado, só rodado na prática).
+    `deploy.test.js` cobre agora `parseEnvFile`/`gerarConfigJsContent`/
+    `sincronizarConfigJs`, incluindo o caso de não re-escrever `config.js`
+    com conteúdo idêntico (evita loop no `fs.watch` de auto-deploy do
+    `server.js`, já que `config.js` também está no whitelist).
 - **e2e**: pulado-pelo-humano (2026-08-19 — sem PHP/SellInfoTurbo local
   disponível para testar a chamada real ponta a ponta; humano optou por ir
   direto ao roteiro de validação com revisão de código)
 - **feedback-reprovacao**:
-- **atualizado-em**: 2026-08-18
+- **atualizado-em**: 2026-08-20
 
 <!-- Regras de manutenção (skill grafo):
 0. Nó `planejada` pode viver SÓ no índice (sem corpo) até ser detalhado —

@@ -4,6 +4,14 @@ const path = require('path');
 
 const PORT = 8080;
 
+const { runDeploy, ALLOWED_FILES, sincronizarConfigJs } = require('./deploy');
+
+try {
+    sincronizarConfigJs();
+} catch (e) {
+    console.warn('⚠️ config.js não gerado:', e.message, '(chamadas ao api.php remoto vão falhar até isso ser corrigido — modo local com IndexedDB não é afetado)');
+}
+
 const server = http.createServer((req, res) => {
     // Decodifica a URL para lidar com espaços e acentos
     let decodedUrl = decodeURIComponent(req.url);
@@ -64,7 +72,6 @@ server.listen(PORT, () => {
 // ==========================================
 // MONITORAMENTO DE ARQUIVOS E DEPLOY AUTOMÁTICO
 // ==========================================
-const { runDeploy, ALLOWED_FILES } = require('./deploy');
 let deployTimeout = null;
 
 fs.watch(__dirname, (eventType, filename) => {

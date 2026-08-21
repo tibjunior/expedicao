@@ -7,8 +7,16 @@
 const parser = new PdfParser();
 
 // Versão da aplicação (para diagnosticar cache)
-const APP_VERSION = '8';
+const APP_VERSION = '9';
 console.log('🐞 Versão da aplicação carregada:', 'v' + APP_VERSION);
+
+// Token das rotas autenticadas do api.php (update_item, add_log, etc. e o
+// proxy bipagem_expedicao) — vem de config.js, gerado a partir do .env no
+// deploy/start (nunca hardcoded aqui; ver deploy.js:sincronizarConfigJs).
+const API_TOKEN = (typeof CONFIG !== 'undefined' && CONFIG.API_TOKEN) ? CONFIG.API_TOKEN : '';
+if (!API_TOKEN) {
+    console.error('⚠️ CONFIG.API_TOKEN ausente (config.js não carregado ou vazio) — chamadas autenticadas ao api.php vão falhar com 401. Rode "npm start" ou "node deploy.js" para gerar config.js a partir do .env.');
+}
 
 // ==========================================
 // BANCO DE DADOS LOCAL (INDEXEDDB RELACIONAL)
@@ -75,9 +83,9 @@ class ExpedicaoDB {
     async apiPost(action, data) {
         const response = await fetch(`api.php?action=${action}`, {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer expedicao_api_token_2026_seguro_aqui'
+                'Authorization': `Bearer ${API_TOKEN}`
             },
             body: JSON.stringify(data)
         });
@@ -4649,7 +4657,7 @@ async function bipagerFetch(payload) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer expedicao_api_token_2026_seguro_aqui'
+            'Authorization': `Bearer ${API_TOKEN}`
         },
         body: JSON.stringify(payload)
     });

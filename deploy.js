@@ -7,13 +7,71 @@ const ALLOWED_FILES = [
     'index.html',
     'index.css',
     'app.js',
+    'bipagem-utils.js',
     'pdf-parser.js',
     'teste.pdf',
     'favicon.svg',
     'logo.png',
     'api.php',
-    '.htaccess'
+    '.htaccess',
+    '.env',
+    'config.js'
 ];
+
+/**
+ * Lê um arquivo no formato .env (CHAVE=valor, uma por linha, # para
+ * comentário) e devolve um objeto. Não usa nenhuma lib externa — mesmo
+ * princípio "sem build step" do resto do projeto.
+ */
+function parseEnvFile(filePath) {
+    const env = {};
+    if (!fs.existsSync(filePath)) {
+        return env;
+    }
+    const linhas = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+    for (const linhaBruta of linhas) {
+        const linha = linhaBruta.trim();
+        if (!linha || linha.startsWith('#') || !linha.includes('=')) {
+            continue;
+        }
+        const idx = linha.indexOf('=');
+        const chave = linha.slice(0, idx).trim();
+        const valor = linha.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+        env[chave] = valor;
+    }
+    return env;
+}
+
+/**
+ * Gera o conteúdo do config.js a partir do API_TOKEN — o mesmo token que
+ * api.php lê do .env. Função pura, testável isoladamente.
+ */
+function gerarConfigJsContent(apiToken) {
+    return `// Gerado automaticamente a partir do .env (npm start / node deploy.js).\n// NÃO editar à mão, NÃO versionar — ver .gitignore.\nconst CONFIG = { API_TOKEN: ${JSON.stringify(apiToken)} };\n`;
+}
+
+/**
+ * Garante que config.js em disco reflete o API_TOKEN atual do .env.
+ * Só escreve se o conteúdo mudou (evita disparar o fs.watch do server.js
+ * em loop, já que config.js está em ALLOWED_FILES). Lança erro se não
+ * houver API_TOKEN configurado — falha fechada, nunca sobe um config.js
+ * com token vazio (foi exatamente isso que quebrou a autenticação em
+ * produção antes desta correção).
+ */
+function sincronizarConfigJs(baseDir = __dirname) {
+    const env = { ...parseEnvFile(path.join(baseDir, '.env')), ...process.env };
+    const apiToken = env.API_TOKEN;
+    if (!apiToken) {
+        throw new Error('API_TOKEN ausente. Defina API_TOKEN no .env (raiz do projeto) antes de rodar/dar deploy.');
+    }
+    const configPath = path.join(baseDir, 'config.js');
+    const novoConteudo = gerarConfigJsContent(apiToken);
+    const atual = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : null;
+    if (atual !== novoConteudo) {
+        fs.writeFileSync(configPath, novoConteudo, 'utf8');
+    }
+    return apiToken;
+}
 
 /**
  * Lê e decodifica as credenciais do arquivo credencial.txt
@@ -49,7 +107,14 @@ function readCredentials() {
  */
 async function runDeploy() {
     console.log('🔄 Iniciando deploy via FTP...');
-    
+
+    try {
+        sincronizarConfigJs();
+    } catch (e) {
+        console.error('❌ Erro ao gerar config.js:', e.message);
+        return false;
+    }
+
     let credentials;
     try {
         credentials = readCredentials();
@@ -101,4 +166,4 @@ if (require.main === module) {
     runDeploy();
 }
 
-module.exports = { runDeploy, ALLOWED_FILES };
+module.exports = { runDeploy, ALLOWED_FILES, parseEnvFile, gerarConfigJsContent, sincronizarConfigJs };
