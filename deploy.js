@@ -8,6 +8,7 @@ const ALLOWED_FILES = [
     'index.css',
     'app.js',
     'etiquetas-ui.js',
+    'label-upload.js',
     'pdf-parser.js',
     'config.js',
     'teste.pdf',
