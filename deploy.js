@@ -9,6 +9,7 @@ const ALLOWED_FILES = [
     'app.js',
     'etiquetas-ui.js',
     'pdf-parser.js',
+    'config.js',
     'teste.pdf',
     'favicon.svg',
     'logo.png',
