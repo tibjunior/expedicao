@@ -46,10 +46,12 @@ const server = http.createServer((req, res) => {
                 res.end('500 Erro Interno: ' + error.code);
             }
         } else {
-            // Adiciona cabeçalhos CORS básicos
+            // Adiciona cabeçalhos CORS e segurança
             res.writeHead(200, { 
                 'Content-Type': contentType,
-                'Access-Control-Allow-Origin': '*'
+                'Access-Control-Allow-Origin': 'http://localhost:8080',
+                'X-Content-Type-Options': 'nosniff',
+                'X-Frame-Options': 'DENY'
             });
             res.end(content, 'utf-8');
         }

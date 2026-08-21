@@ -389,123 +389,87 @@ git push origin main
 
 ---
 
-## 10. Integração Bipagem — SellInfoTurbo / Tiny ERP
+## 10. Integração Tiny — Impressão de Etiquetas (Bipagem)
 
-**Status:** ✅ Implementado (commit `e9912a7` + correções de
-2026-08-19 — ver nó `bipagem-tiny-sellinfo` em `GRAFO.md`)
+**Status:** ✅ Em implementação (deploy pendente de finalização de estilos/UI)
 
-### Visão Geral
+### Objetivo (comportamento definido pelo usuário)
 
-Ao expedir um item (bipagem, conferência manual ou conferência sem EAN),
-o sistema dispara automaticamente a expedição do pedido e a geração de
-etiqueta via API de bipagem do projeto **SellInfoTurbo**, que por sua vez
-fala com o Tiny ERP.
+A validação do pedido (enviar para expedição e marcar como **feito/expedido**) **só acontece após a chegada da etiqueta**. O item **não** é marcado como expedido antes de confirmar que a etiqueta foi emitida.
 
-### Fluxo real
+- Se a etiqueta chegar ✅ → abre a etiqueta (impressão direta ou modal de vista prévia) e marca o pedido (grupo `ec`) como **expedido**.
+- Se der erro ❌ → mostra **popup com erro tratado** (linguagem acessível ao usuário comum, sem jargão técnico), mantém o pedido **não expedido** e o adiciona a uma **lista de pendentes** que deve ser resolvida **antes de fechar o PDF/lista**.
+- **Modelo por pedido único:** agrupa pelo campo `ec` (mercado livre `702-3112191-8144262`, Shopee, Amazon, Magalu, etc.). Só quando **todos** os itens de um mesmo `ec` ficarem com `quantidade = 0` é que a etiqueta é solicitada (1 única por pedido).
+- Durante a espera da resposta, exibe **"Aguardando etiqueta"** com animação.
+- Opção persistente nas Configurações (e no próprio popup): **"Imprimir as próximas etiquetas automaticamente"**.
+
+### Fluxo Técnico (novo)
 
 ```
-Item vira "expedido" (processBarcodeRead / manualAddUnit / confirmNoEanYes)
+[item bipado / manual / sem EAN]
+    ↓ (decrementa quantidade; NÃO marca expedido ainda)
+se quantidade == 0
     ↓
-tinyEnviarEtiqueta(item)  — só dispara se expedicao_tiny_enabled='1' ou modo mock
-    ↓
-solicitarEtiquetaTiny(item.ec, cnpjDaLoja)
-    ↓ normalizarIdentificadorPedido(item.ec)  [bipagem-utils.js]
-    ↓ (dedup via tinyPrintedOrders)
-bipagerFetch() → POST api.php?action=bipagem_expedicao  (proxy, evita CORS)
-    Authorization: Bearer <API_TOKEN>  ← exige autenticação (ver nota abaixo)
-    ↓ (server-side, cURL)
-POST https://dashvturbo.kn8x.com.br/api/bipagem/expedicao
-    Authorization: Bearer <token do localStorage ou BIPAGEM_API_KEY do servidor>
-    body: { pedidos: ["<Nº EC do PDF>"], cnpj }
-    ↓
-SellInfoTurbo resolve o pedido por numeroPedidoEcommerce, verifica nota
-fiscal (bloqueia se ausente/cancelada — status sem_nota_fiscal /
-nota_fiscal_cancelada / erro_verificacao_nota_fiscal), expede no Tiny,
-devolve { agrupamentos, etiquetas, pedidos: [{ numero, status, detalhe,
-notaFiscalLink, notaFiscalIndisponivel }] }
-    ↓
-Etiqueta e DANFE abrem cada uma em nova aba; toast de sucesso/erro/aviso
-conforme status (mensagem específica por motivo — nunca genérica)
+procesarPedidoCompletado(ec, cnpj, item)
+    ├─ ec vazio / "Sem Pedido" → marcarItemExpedido(item)
+    ├─ etiqueta já emitida (tinyPrintedOrders) → marcarGrupoPedidoExpedido(ec)
+    ├─ grupo do pedido ainda incompleto → aguarda (esperandoGrupo)
+    └─ grupo completo → setEstadoAguardandoEtiqueta(ec, true)
+                            ↓ solicitarEtiquetaTiny(ec, cnpj)  (retorna {ok, etiquetas, error})
+        ├─ ok ✅ → marcarGrupoPedidoExpedido(ec) → mostrarEtiquetasRecibidas(res, ec)
+        │            (impressão direta OU modal preview, conforme auto_imprimir)
+        └─ erro ❌ → agregarPendienteEtiqueta(ec, error) → mostrarModalErrorEtiqueta(error, ec)
 ```
 
-### Identificador do pedido — ponto crítico
+### Funções implementadas (app.js)
 
-O campo `ec` extraído do PDF (regex `Nº\s+EC\s+(\S+)` em
-`pdf-parser.js`) é o número do pedido **na plataforma de venda**, nunca o
-número interno do Tiny. Formato varia por canal (exemplos reais de
-`teste.pdf`):
+- `procesarPedidoCompletado(ec, cnpj, item)` — orquestador central.
+- `marcarGrupoPedidoExpedido(ec)` / `marcarItemExpedido(item)` — marca os itens como expedidos.
+- `solicitarEtiquetaTiny(numeroPedido, cnpj)` — agora **retorna** `{ ok, etiquetas, error }` e **não** abre/expede por conta própria.
+- `extraerEtiquetasRespuesta(data)` — extração tolerante do PDF/URL (etiquetas, agrupamentos, base64, objetos).
+- `abrirEtiquetaUrl(url)` / `mostrarEtiquetasRecibidas` / `abrirEtiquetaPreview` / `imprimirEtiquetasPreview` — abertura/impressão.
+- `mostrarModalErrorEtiqueta(error, ec)` / `traducirErrorEtiqueta(raw)` — erro amigável.
+- `agregarPendienteEtiqueta`, `reintentarPendienteEtiqueta`, `renderListaPendientes`, `abrirModalPendientes` — lista de pendentes persistida em `localStorage` (`expedicao_etiquetas_pendientes`).
+- `setEstadoAguardandoEtiqueta(ec, activo)` — banner/indicador "Aguardando etiqueta".
+- `checkAllCompleted()` — agora só conclui a lista quando **todos** os itens estão `expedido` e **não** existem pendentes/aguardando.
+- `escHtml`, `abrirEtiquetaUrl` etc. — helpers de segurança/abertura.
 
-| Canal | Nº EC |
-|---|---|
-| Mercado Livre | `2000013866459793` |
-| Shopee | `26070606BSBAKE` |
-| Magalu | `LU-1550370116151430` |
-| Amazon | `702-9802415-7265855` |
-| TikTok Shop | `584878309630969099` |
+### Estados de etiqueta
 
-Por isso o app **nunca** converte esse valor para inteiro — sempre manda
-como string (`normalizarIdentificadorPedido`), e o SellInfoTurbo resolve
-pelo campo `numeroPedidoEcommerce` (não pelo número interno do Tiny).
+| Estado | Quando | Comportamento |
+|--------|--------|---------------|
+| `etiquetasEsperando` | grupo completo aguardando resposta da API | badge "Aguardando etiqueta" + spinner |
+| `etiquetasPendientes` | etiqueta falhou | fica para reintentar antes de fechar o PDF |
+| `tinyPrintedOrders` | etiqueta já emitida/impressa | pedido é marcado expedido sem nova chamada |
+| `tinyInFlight` | requisição em andamento | evita chamadas concorrentes (422) |
 
-### Nota fiscal obrigatória para expedir
+### Configurações (Popup ⚙️)
 
-Desde 2026-08-20, o sistema bloqueia a expedição de um pedido sem nota
-fiscal válida (Autorizada ou Emitida DANFE) no Tiny — não expede só com
-a etiqueta. A verificação usa primeiro o banco local do SellInfoTurbo,
-confirmando ao vivo no Tiny quando necessário (nunca bloqueia só por
-atraso de sincronização). Três status possíveis de bloqueio, cada um com
-mensagem própria no toast: `sem_nota_fiscal`, `nota_fiscal_cancelada`,
-`erro_verificacao_nota_fiscal`.
+1. **Chave da Automação (BIPAGEM_API_KEY)** — `popup-tiny-token` → armazenada em `expedicao_tiny_token`.
+2. **Toggle `popup-config-tiny-enabled`** — habilita a funcionalidade (`expedicao_tiny_enabled`).
+3. **Toggle 🧪 Modo Simulação** — `popup-config-bipagem-mock` (`expedicao_bipagem_mock`).
+4. **Toggle 🖨️ Imprimir as próximas etiquetas automaticamente** — `popup-config-tiny-auto-imprimir` / `expedicao_tiny_auto_imprimir` (também no popup de vista prévia, `toggleAutoImprimirDesdePreview`).
 
-### Autenticação do proxy — dois tokens diferentes, não confundir
+> Obs.: O envio ao endpoint `dashvturbo.kn8x.com.br/api/bipagem/expedicao` é feito de forma **server-side** via `api.php` (ação `bipagem_expedicao`), preservando a string completa do `ec` sem truncá-la (o anterior `parseInt`/`intval` truncava o Mercado Livre para o nº do site `702`).
 
-`api.php?action=bipagem_expedicao` exige o header `Authorization: Bearer
-<API_TOKEN>` (o mesmo token administrativo dos outros endpoints de
-escrita, via `authenticateRequest()`) — sem isso, 401 antes de qualquer
-outra coisa. Isso é **diferente** do campo `token` no body da chamada, que
-é a `BIPAGEM_API_KEY` do operador (ou o fallback do servidor). Até
-2026-08-19 esse endpoint não exigia `API_TOKEN` nenhum, então qualquer
-requisição anônima conseguia disparar expedição real assim que
-`BIPAGEM_API_KEY` estivesse configurada no servidor.
+### Erros tratados (linguagem amigável)
 
-**Isso ainda não é uma correção completa** (achado em revisão adversarial,
-2026-08-20): `API_TOKEN` está hardcoded em texto puro no `app.js` — arquivo
-estático, servido a qualquer visitante, sem login nem gate nenhum na
-página. Qualquer um com "view-source" encontra o token e chama o endpoint
-direto, contornando essa proteção. A mudança só fecha o caso mais simples
-(bot batendo na URL sem nunca ter aberto a página); não impede alguém
-motivado a abrir o JS público. Correção de verdade exigiria um mecanismo
-de auth que não dependa de segredo embutido em JS estático (ex.: sessão de
-login, ou mover a chamada para trás de algo que o navegador não consegue
-ler). Registrado como débito técnico pendente, fora do escopo desta
-demanda.
+| Erro técnico | Mensagem ao usuário |
+|--------------|---------------------|
+| 401 / chave inválida | A chave de conexão com o sistema de etiquetas não é válida. |
+| 404 / não encontrado | Não se encontrou nenhum pedido com esse código. |
+| timeout / conexão | Não se pôde conectar com o servidor de etiquetas. |
+| 422 / concorrente | O sistema está processando este pedido agora; tente novamente em segundos. |
+| expedido sem etiqueta | O pedido se processou mas não se pôde baixar a etiqueta. |
+| 500 / servidor | Problema temporário no servidor; tente novamente em minutos. |
 
-### Configuração necessária (popup ⚙️ de configurações)
+### Próximos passos
 
-1. **Ativar impressão automática** (`popup-config-tiny-enabled`) — sem
-   isso, `tinyEnviarEtiqueta` nunca dispara chamada nenhuma (fica só um
-   log `🐞` no console, sem toast de erro — pegadinha comum ao depurar).
-2. **Token** (`popup-tiny-token`) — a `BIPAGEM_API_KEY` do SellInfoTurbo.
-   Opcional se o servidor tiver a env/arquivo de config (ver abaixo).
-3. **Modo simulação** (`popup-config-bipagem-mock`) — não chama a API
-   real, útil para testar o fluxo sem tocar produção.
-
-### Ação manual pendente em produção (HostGator)
-
-`api.php` não tem mais nenhuma chave hardcoded. Sem token do operador e
-sem `BIPAGEM_API_KEY` configurada no servidor, a bipagem responde 401.
-Configure UMA das duas opções no servidor de produção:
-
-- Variável de ambiente `BIPAGEM_API_KEY` (se o hosting suportar `SetEnv`
-  no `.htaccess` ou painel), OU
-- Arquivo `bipagem-config.php` **fora da pasta pública** (irmão de
-  `../expedicao.db`), com `<?php return ['BIPAGEM_API_KEY' =>
-  'SUA_CHAVE'];`.
-
-A chave anterior (hardcoded no commit `e9912a7`, removida do código nesta
-correção) era uma chave real de produção — o humano é responsável por
-rotacioná-la no SellInfoTurbo separadamente.
+1. Finalizar estilos CSS dos novos modais/badges/indicador.
+2. Chamar `initEtiquetasUI()` na inicialização da aplicação.
+3. Subir versão em `index.html` e realizar deploy via FTP (`node deploy.js`).
+4. Testar fluxo de sucesso e de erro em Modo Simulação; validar string completa no endpoint.
 
 ---
 
-*Documento gerado em 20/07/2026 · Última atualização: 19/08/2026 · Mantenha atualizado com cada nova funcionalidade*
+*Documento gerado em 20/07/2026 · Última atualização: 20/08/2026 · Mantenha atualizado com cada nova funcionalidade*

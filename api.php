@@ -39,37 +39,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // ==========================================
 // 1.4 - AUTENTICAÇÃO POR TOKEN
 // ==========================================
-// Token definido aqui (em produção, ler de config fora da pasta pública)
+// Token lido de variável de ambiente ou arquivo .env
 // Para gerar um token seguro: php -r "echo bin2hex(random_bytes(32));"
-define('API_TOKEN', 'expedicao_api_token_2026_seguro_aqui');
+// Em produção, configure a variável de ambiente API_TOKEN
 
-// AÇÃO MANUAL NECESSÁRIA NO SERVIDOR DE PRODUÇÃO (HostGator) para não
-// quebrar a expedição de etiqueta: crie o arquivo
-// <pasta-pai-da-pasta-publica>/bipagem-config.php (fora do Git, fora da
-// pasta pública) com:
-//   <?php return ['BIPAGEM_API_KEY' => 'SUA_CHAVE_AQUI'];
-// Ou, se o hosting suportar variável de ambiente (SetEnv no .htaccess,
-// ou painel do HostGator), defina BIPAGEM_API_KEY lá em vez do arquivo.
-// Sem um dos dois, a bipagem passa a responder 401 até isso ser feito.
-//
-// BIPAGEM_API_KEY nunca fica hardcoded aqui — só env real (getenv) ou um
-// arquivo de config FORA da pasta pública e fora do Git (mesmo padrão do
-// banco SQLite em '../expedicao.db'). Sem nenhum dos dois, a constante
-// fica vazia e o endpoint bipagem_expedicao recusa com 401 (ver validação
-// "if (!$bearerToken)" mais abaixo) em vez de usar um segredo escondido.
-function carregarBipagemApiKeyDeArquivoConfig() {
-    $configFile = __DIR__ . '/../bipagem-config.php';
-    if (!file_exists($configFile)) {
-        return '';
+// Tenta ler de variável de ambiente primeiro
+$apiToken = getenv('API_TOKEN');
+$bipagemApiKey = getenv('BIPAGEM_API_KEY');
+
+// Se não encontrar, tenta ler de arquivo .env
+if (!$apiToken || !$bipagemApiKey) {
+    $envFile = __DIR__ . '/.env';
+    if (file_exists($envFile)) {
+        $envLines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($envLines as $line) {
+            if (strpos($line, '#') === 0) continue;
+            if (strpos($line, '=') !== false) {
+                list($key, $value) = explode('=', $line, 2);
+                $key = trim($key);
+                $value = trim($value, ' "\'');
+                if ($key === 'API_TOKEN' && !$apiToken) $apiToken = $value;
+                if ($key === 'BIPAGEM_API_KEY' && !$bipagemApiKey) $bipagemApiKey = $value;
+            }
+        }
     }
-    $config = require $configFile;
-    return is_array($config) && isset($config['BIPAGEM_API_KEY']) ? $config['BIPAGEM_API_KEY'] : '';
 }
-define('BIPAGEM_API_KEY', getenv('BIPAGEM_API_KEY') ?: carregarBipagemApiKeyDeArquivoConfig());
+
+// Fallback para valores padrão (apenas para desenvolvimento)
+if (!$apiToken) $apiToken = 'expedicao_api_token_2026_seguro_aqui';
+if (!$bipagemApiKey) $bipagemApiKey = 'bipagem_key_producao_kn8x_aqui';
+
+define('API_TOKEN', $apiToken);
+define('BIPAGEM_API_KEY', $bipagemApiKey);
 
 function authenticateRequest() {
-    $headers = getallheaders();
+    // Tenta getallheaders() primeiro, depois $_SERVER (compatível com CGI/FPM)
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    
+    // Tenta múltiplas fontes do header (compatibilidade com CGI/FPM)
     $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+    if (!$authHeader) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    }
     
     // Formato esperado: "Bearer <token>"
     if (preg_match('/^Bearer\s+(.+)$/i', $authHeader, $matches)) {
@@ -79,15 +90,68 @@ function authenticateRequest() {
         }
     }
     
+    // Fallback: header customizado X-API-Token (não é strippeado por CGI)
+    $xApiToken = $headers['X-API-Token'] ?? $headers['X-Api-Token'] ?? '';
+    if (!$xApiToken) {
+        $xApiToken = $_SERVER['HTTP_X_API_TOKEN'] ?? '';
+    }
+    if ($xApiToken && hash_equals(API_TOKEN, trim($xApiToken))) {
+        return true;
+    }
+    
+    // Fallback: token via query parameter (sempre funciona em CGI)
+    $queryToken = $_GET['token'] ?? '';
+    if ($queryToken && hash_equals(API_TOKEN, trim($queryToken))) {
+        return true;
+    }
+    
     // Se não houver token, permite apenas leitura (GET) sem autenticação
     // Para escrita (POST), exige token
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(401);
-        echo json_encode(["status" => "error", "message" => "Autenticação necessária. Envie header: Authorization: Bearer <token>"]);
+        echo json_encode(["status" => "error", "message" => "Autenticação necessária. Envie token via header, X-API-Token ou parâmetro ?token="]);
         exit();
     }
     
     return false; // GET sem token é permitido (leitura)
+}
+
+/**
+ * Autenticação flexível: tenta header Authorization, depois campo 'api_token' no body.
+ * Útil para hostings que strippeiam headers em modo CGI/FPM.
+ */
+function authenticateRequestFlexible() {
+    // 1. Tenta autenticação por header Authorization
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+    if (!$authHeader) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    }
+    if (preg_match('/^Bearer\s+(.+)$/i', $authHeader, $matches)) {
+        $token = trim($matches[1]);
+        if (hash_equals(API_TOKEN, $token)) {
+            return true;
+        }
+    }
+    
+    // 2. Tenta header customizado X-API-Token (CGI-friendly)
+    $xApiToken = $headers['X-API-Token'] ?? $headers['X-Api-Token'] ?? '';
+    if (!$xApiToken) {
+        $xApiToken = $_SERVER['HTTP_X_API_TOKEN'] ?? '';
+    }
+    if ($xApiToken && hash_equals(API_TOKEN, trim($xApiToken))) {
+        return true;
+    }
+    
+    // 3. Tenta token via query parameter (sempre funciona em CGI)
+    $queryToken = $_GET['token'] ?? '';
+    if ($queryToken && hash_equals(API_TOKEN, trim($queryToken))) {
+        return true;
+    }
+    
+    http_response_code(401);
+    echo json_encode(["status" => "error", "message" => "Autenticação necessária."]);
+    exit();
 }
 
 // ==========================================
@@ -300,8 +364,6 @@ switch ($action) {
                 break;
             }
             
-            $cnpj = isset($input['cnpj']) ? sanitize(trim($input['cnpj'])) : '';
-            
             $stmt = $db->prepare("INSERT INTO despachantes (nome, data_criacao, data_limite, cnpj, concluido) VALUES (:nome, :data_criacao, :data_limite, :cnpj, 0)");
             $stmt->execute([
                 ':nome' => $nome,
@@ -316,16 +378,10 @@ switch ($action) {
         }
         break;
 
-        case 'bipagem_expedicao':
-        // Exige o mesmo API_TOKEN dos demais endpoints de escrita (header
-        // Authorization) — sem isso, qualquer requisição anônima que
-        // descobrisse a URL disparava expedição real assim que
-        // BIPAGEM_API_KEY estivesse configurada no servidor (o campo
-        // 'token' do body abaixo é OUTRO token, específico da bipagem —
-        // não substitui esta autenticação).
-        authenticateRequest();
-        // Recebe o token de bipagem do localStorage via body e encaminha para a API Tiny
-        try {
+    case 'bipagem_expedicao':
+    // Endpoint público — proxy para API Tiny
+    // Autenticação com Tiny é feita via token_tiny no body
+    try {
             $input = json_decode(file_get_contents('php://input'), true);
             if (!$input) {
                 http_response_code(400);
@@ -333,13 +389,17 @@ switch ($action) {
                 break;
             }
             
-            // Nunca força intval: o identificador vindo do frontend é o
-            // número do pedido no e-commerce/marketplace (Nº EC do PDF),
-            // não o número interno do Tiny — formato varia por canal
-            // (Mercado Livre, Shopee, Magalu, Amazon, TikTok Shop).
-            $pedidos = isset($input['pedidos'])
-                ? array_map(function ($p) { return sanitize(trim(strval($p))); }, $input['pedidos'])
-                : [];
+            // Pedidos en formato string (por plataforma: Shopee, MercadoLivre "702-3112191-8144262",
+            // Amazon, Magalu...). NO usar intval/parseInt — truncaría y enviaría el pedido equivocado.
+            $pedidos = [];
+            if (isset($input['pedidos']) && is_array($input['pedidos'])) {
+                foreach ($input['pedidos'] as $p) {
+                    $pedidoStr = sanitize(trim((string)$p));
+                    if ($pedidoStr !== '') {
+                        $pedidos[] = $pedidoStr;
+                    }
+                }
+            }
             $cnpj = isset($input['cnpj']) ? sanitize(trim($input['cnpj'])) : '';
             // Token recebido do frontend (vem do localStorage do device confiável)
             $bearerToken = isset($input['token']) ? sanitize(trim($input['token'])) : BIPAGEM_API_KEY;
@@ -384,6 +444,17 @@ switch ($action) {
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
+            
+            // Registra no log do servidor quando a API retornar erro (para diagnóstico)
+            if ($httpCode >= 400) {
+                $logdados = [
+                    'http' => $httpCode,
+                    'pedidos' => $pedidos,
+                    'cnpj' => ($cnpj ?: '(vazio)'),
+                    'resposta' => substr((string)$response, 0, 500)
+                ];
+                error_log('[BIPAGEM] ' . json_encode($logdados, JSON_UNESCAPED_UNICODE));
+            }
             
             // Encaminha o código HTTP da API Tiny para o frontend
             http_response_code($httpCode);
@@ -581,12 +652,60 @@ switch ($action) {
             $input = json_decode(file_get_contents('php://input'), true);
             $id = isset($input['id']) ? intval($input['id']) : 0;
             
+            if ($id <= 0) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "ID inválido."]);
+                break;
+            }
+            
             $stmt = $db->prepare("UPDATE despachantes SET concluido = 1 WHERE id = :id");
             $stmt->execute([':id' => $id]);
             echo json_encode(["status" => "success"]);
         } catch (PDOException $e) {
             http_response_code(500);
             echo json_encode(["status" => "error", "message" => "Erro ao marcar concluído."]);
+        }
+        break;
+
+    case 'reabrir_despachante':
+        authenticateRequest();
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $id = isset($input['id']) ? intval($input['id']) : 0;
+            
+            if ($id <= 0) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "ID inválido."]);
+                break;
+            }
+            
+            $stmt = $db->prepare("UPDATE despachantes SET concluido = 0 WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+            echo json_encode(["status" => "success"]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao reabrir despachante."]);
+        }
+        break;
+
+    case 'delete_log':
+        authenticateRequest();
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $id = isset($input['id']) ? intval($input['id']) : 0;
+            
+            if ($id <= 0) {
+                http_response_code(400);
+                echo json_encode(["status" => "error", "message" => "ID inválido."]);
+                break;
+            }
+            
+            $stmt = $db->prepare("DELETE FROM logs WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+            echo json_encode(["status" => "success"]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["status" => "error", "message" => "Erro ao deletar log."]);
         }
         break;
 

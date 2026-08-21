@@ -246,7 +246,7 @@ class PdfParser {
                 }
                 
                 items.push({
-                    id: items.length + 1,
+                    id: 'pdf_' + items.length + '_' + Date.now(),
                     nota: currentNota,
                     ec: currentEc || 'Sem Pedido',
                     cliente: currentCliente || 'Desconhecido',

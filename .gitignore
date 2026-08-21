@@ -1,4 +1,6 @@
 credencial.txt
 node_modules/
 .env
+.env.ftp
 Backup/
+config.js
