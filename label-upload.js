@@ -7,22 +7,39 @@
 // Regex para extração de ec (número do pedido) de various plataformas
 const EC_PATTERNS = [
     /Pedido\s*(\d[\d\-\.]+)/i,
+    /(\d{3}-\d{7}-\d{7})/,
     /(\d{3}-\d{7,}-\d+)/,
     /No\.\s*Pedido[:\s]*(\d[\d\-]+)/i,
+    /Order\s*#?\s*ID[:\s]*(\d[\d\-]+)/i,
     /Order\s*#?(\d[\d\-]+)/i,
-    /(\d{3}-\d{7}-\d{7})/,
     /(?:PED|PEDIDO|ORDER|Nº|N°)[\s:]*([A-Z0-9\-]{5,})/i,
     /SHP[\-]?\d[\d\-]+/i,
     /TTS[\-]?\d[\d\-]+/i
 ];
 
+// Decodifica texto hex-encoded do modo ^FH da Zebra (_4F_72... -> "Or...")
+function decodificarHexZpl(texto) {
+    if (!texto) return '';
+    return texto.replace(/\\&/g, ' ').replace(/_([0-9A-Fa-f]{2})/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
+}
+
+// Normaliza ec para comparação (remove espaços, traços e pontos)
+function normalizarEc(ec) {
+    return String(ec || '').trim().replace(/[\s\-\.]/g, '').toUpperCase();
+}
+
 function extrairEcDeTexto(texto) {
     if (!texto) return null;
-    for (const pattern of EC_PATTERNS) {
-        const match = texto.match(pattern);
-        if (match) {
-            const ec = match[1] || match[0];
-            return ec.trim();
+    const candidatos = [texto];
+    const decodificado = decodificarHexZpl(texto);
+    if (decodificado !== texto) candidatos.push(decodificado);
+
+    for (const candidato of candidatos) {
+        for (const pattern of EC_PATTERNS) {
+            const match = candidato.match(pattern);
+            if (match && match[1]) {
+                return match[1].trim();
+            }
         }
     }
     return null;
@@ -120,7 +137,7 @@ async function processarPdfEtiquetas(file) {
                 const arrayBuffer = e.target.result;
                 const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 const itens = state.items || [];
-                const ecsDespachante = [...new Set(itens.map(i => String(i.ec).trim()).filter(ec => ec && ec !== 'Sem Pedido'))];
+                const ecsDespachante = new Set(itens.map(i => normalizarEc(i.ec)).filter(ec => ec && ec !== 'SEMPEDIDO'));
 
                 for (let i = 1; i <= pdf.numPages; i++) {
                     const page = await pdf.getPage(i);
@@ -128,7 +145,9 @@ async function processarPdfEtiquetas(file) {
                     const fullText = textContent.items.map(item => item.str).join(' ');
 
                     const ec = extrairEcDeTexto(fullText);
-                    const isEcValido = ec && ecsDespachante.includes(ec);
+                    const ecNorm = ec ? normalizarEc(ec) : null;
+                    const itemMatch = ecNorm ? itens.find(i => normalizarEc(i.ec) === ecNorm) : null;
+                    const isEcValido = !!itemMatch;
 
                     // Converte página para base64
                     const canvas = document.createElement('canvas');
@@ -141,7 +160,7 @@ async function processarPdfEtiquetas(file) {
 
                     await db.addEtiqueta(
                         state.activeDespachanteId,
-                        isEcValido ? ec : '',
+                        isEcValido ? String(itemMatch.ec).trim() : '',
                         'pdf',
                         base64,
                         file.name
@@ -181,15 +200,17 @@ async function processarZplEtiquetas(file) {
                 }
 
                 const itens = state.items || [];
-                const ecsDespachante = [...new Set(itens.map(i => String(i.ec).trim()).filter(ec => ec && ec !== 'Sem Pedido'))];
+                const ecsDespachante = new Set(itens.map(i => normalizarEc(i.ec)).filter(ec => ec && ec !== 'SEMPEDIDO'));
 
                 for (const bloco of blocos) {
                     const ec = extrairEcDeTexto(bloco);
-                    const isEcValido = ec && ecsDespachante.includes(ec);
+                    const ecNorm = ec ? normalizarEc(ec) : null;
+                    const itemMatch = ecNorm ? itens.find(i => normalizarEc(i.ec) === ecNorm) : null;
+                    const isEcValido = !!itemMatch;
 
                     await db.addEtiqueta(
                         state.activeDespachanteId,
-                        isEcValido ? ec : '',
+                        isEcValido ? String(itemMatch.ec).trim() : '',
                         'zpl',
                         bloco,
                         file.name
@@ -221,12 +242,12 @@ async function refreshLabelUploadState() {
     try {
         const etiquetas = await db.getEtiquetasByDespachante(state.activeDespachanteId);
         const itens = state.items || [];
-        const ecsDespachante = [...new Set(itens.map(i => String(i.ec).trim()).filter(ec => ec && ec !== 'Sem Pedido'))];
+        const ecsDespachante = new Set(itens.map(i => normalizarEc(i.ec)).filter(ec => ec && ec !== 'SEMPEDIDO'));
 
         labelUploadState.etiquetas = etiquetas || [];
         labelUploadState.despachanteId = state.activeDespachanteId;
-        labelUploadState.vinculadas = (etiquetas || []).filter(e => e.ec && ecsDespachante.includes(String(e.ec).trim()));
-        labelUploadState.orfas = (etiquetas || []).filter(e => !e.ec || !ecsDespachante.includes(String(e.ec).trim()));
+        labelUploadState.vinculadas = (etiquetas || []).filter(e => e.ec && ecsDespachante.has(normalizarEc(e.ec)));
+        labelUploadState.orfas = (etiquetas || []).filter(e => !e.ec || !ecsDespachante.has(normalizarEc(e.ec)));
 
         renderLabelUploadSummary();
         renderLabelOrphans();
@@ -285,7 +306,6 @@ function renderLabelOrphans() {
         const optionsHtml = ecsDespachante.map(ec =>
             `<option value="${escHtml(ec)}">${escHtml(ec)}</option>`
         ).join('');
-
         return `<div class="etiqueta-item orphans" data-id="${et.id}">
             ${preview}
             <div class="etiqueta-info">

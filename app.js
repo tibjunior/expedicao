@@ -567,7 +567,8 @@ class ExpedicaoDB {
             const request = index.getAll(IDBKeyRange.only(despachanteId));
             request.onsuccess = (e) => {
                 const all = e.target.result || [];
-                const match = all.find(et => String(et.ec).trim() === String(ec).trim());
+                const norm = (v) => String(v || '').trim().replace(/[\s\-\.]/g, '').toUpperCase();
+                const match = all.find(et => norm(et.ec) === norm(ec));
                 resolve(match || null);
             };
             request.onerror = (e) => reject(e);
