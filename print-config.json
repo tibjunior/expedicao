@@ -1,0 +1,15 @@
+{
+    "printers": {
+        "zd230": {
+            "type": "tcp",
+            "host": "192.168.1.210",
+            "port": 9100
+        },
+        "zd220": {
+            "type": "usb",
+            "command": "print"
+        }
+    },
+    "default": "zd230",
+    "port": 9200
+}

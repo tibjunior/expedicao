@@ -5183,8 +5183,8 @@ async function imprimirEtiquetaArmazenada(etiqueta) {
     if (!etiqueta) return;
     const printerConfig = getPrinterConfig();
 
+    // ZPL: tenta print server primeiro
     if (etiqueta.tipo === 'zpl' && printerConfig && printerConfig.type === 'tcp') {
-        // ZPL direto para impressora via print server
         try {
             const response = await fetch('http://localhost:9200/print', {
                 method: 'POST',
@@ -5197,13 +5197,14 @@ async function imprimirEtiquetaArmazenada(etiqueta) {
                 return;
             }
         } catch (e) {
-            console.warn('Print server indisponível, usando fallback browser:', e);
+            console.warn('Print server indisponível:', e.message);
         }
     }
 
+    // Fallback: abre janela de preview
     if (etiqueta.tipo === 'pdf') {
-        const printWindow = window.open('', '_blank', 'width=420,height=600');
-        printWindow.document.write(`<!DOCTYPE html><html><head><style>
+        const w = window.open('', '_blank', 'width=420,height=600');
+        w.document.write(`<!DOCTYPE html><html><head><style>
             body{margin:0;padding:0;background:#fff;}
             @page{size:100mm 150mm;margin:3mm;}
             @media print{body{margin:0;padding:0;}iframe{border:none;width:100mm;height:150mm;}}
@@ -5211,19 +5212,190 @@ async function imprimirEtiquetaArmazenada(etiqueta) {
             <iframe src="data:application/pdf;base64,${etiqueta.conteudo}" style="width:100mm;height:150mm;border:none;"></iframe>
             <script>window.onload=function(){setTimeout(function(){window.print();},500);}<\/script>
         </body></html>`);
-        printWindow.document.close();
+        w.document.close();
     } else if (etiqueta.tipo === 'zpl') {
-        const printWindow = window.open('', '_blank', 'width=420,height=600');
-        printWindow.document.write(`<!DOCTYPE html><html><head><style>
-            body{font-family:'Courier New',monospace;font-size:10px;white-space:pre;padding:10px;background:#fff;}
-            @page{size:100mm 150mm;margin:3mm;}
-        </style></head><body><pre>${escHtml(etiqueta.conteudo)}</pre>
-            <script>window.onload=function(){window.print();}<\/script>
-        </body></html>`);
-        printWindow.document.close();
+        renderZplPreview(etiqueta);
     }
 
     await db.marcarEtiquetaImpressa(etiqueta.id);
+}
+
+function renderZplPreview(etiqueta) {
+    const w = window.open('', '_blank', 'width=500,height=700');
+    const zpl = etiqueta.conteudo;
+    const ec = etiqueta.ec || '';
+    w.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8">
+    <title>Etiqueta ${escHtml(ec)}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }
+        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .header h2 { font-size: 16px; }
+        .badge { background: #6366f1; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .canvas-wrap { background: #fff; border-radius: 8px; padding: 10px; margin-bottom: 16px; display: flex; justify-content: center; }
+        canvas { max-width: 100%; border: 1px solid #333; }
+        .actions { display: flex; gap: 8px; }
+        .btn { padding: 10px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .btn-primary { background: #6366f1; color: #fff; }
+        .btn-primary:hover { background: #5558e6; }
+        .btn-outline { background: transparent; color: #6366f1; border: 1px solid #6366f1; }
+        .btn-outline:hover { background: rgba(99,102,241,0.1); }
+        .btn-success { background: #22c55e; color: #fff; }
+        .btn-success:hover { background: #16a34a; }
+        .code { background: #0f0f23; border-radius: 6px; padding: 12px; margin-top: 16px; font-family: 'Courier New', monospace; font-size: 10px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; color: #a0a0c0; border: 1px solid #333; }
+        .printer-status { font-size: 12px; color: #888; margin-top: 8px; }
+    </style>
+</head><body>
+    <div class="header">
+        <h2>🏷️ Etiqueta de Envio</h2>
+        <span class="badge">${escHtml(ec)}</span>
+    </div>
+    <div class="canvas-wrap">
+        <canvas id="zpl-canvas" width="812" height="1218"></canvas>
+    </div>
+    <div class="actions">
+        <button class="btn btn-success" id="btn-print-zpl">🖨️ Imprimir</button>
+        <button class="btn btn-primary" id="btn-send-print-server">📤 Enviar p/ Impressora</button>
+        <button class="btn btn-outline" id="btn-copy-zpl">📋 Copiar ZPL</button>
+    </div>
+    <div class="printer-status" id="printer-status"></div>
+    <div class="code">${escHtml(zpl)}</div>
+    <script>
+        const ZPL = ${JSON.stringify(zpl)};
+        const EC = ${JSON.stringify(ec)};
+        renderZplToCanvas(ZPL);
+        checkPrintServer();
+
+        document.getElementById('btn-print-zpl').onclick = function() {
+            const c = document.getElementById('zpl-canvas');
+            const url = c.toDataURL('image/png');
+            const pw = window.open('', '_blank', 'width=420,height=600');
+            pw.document.write('<!DOCTYPE html><html><head><style>@page{size:100mm 150mm;margin:3mm;}body{margin:0;display:flex;justify-content:center;align-items:center;height:100vh;}img{max-width:100mm;max-height:150mm;}</style></head><body><img src="' + url + '"><script>window.onload=function(){setTimeout(function(){window.print();window.close();},300);}<\\/script></body></html>');
+            pw.document.close();
+        };
+
+        document.getElementById('btn-send-print-server').onclick = async function() {
+            const btn = this;
+            btn.textContent = '⏳ Enviando...';
+            btn.disabled = true;
+            try {
+                const printers = JSON.parse(localStorage.getItem('expedicao_printers') || '[]');
+                const def = localStorage.getItem('expedicao_default_printer') || '';
+                const printer = printers.find(p => p.name === def) || printers[0];
+                const resp = await fetch('http://localhost:9200/print', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ zpl: ZPL, printer: printer ? printer.name : 'zd230' })
+                });
+                if (resp.ok) {
+                    btn.textContent = '✅ Enviado!';
+                    btn.style.background = '#22c55e';
+                } else {
+                    const err = await resp.json();
+                    btn.textContent = '❌ ' + (err.error || 'Erro');
+                }
+            } catch (e) {
+                btn.textContent = '❌ Print server offline';
+            }
+            setTimeout(() => { btn.textContent = '📤 Enviar p/ Impressora'; btn.disabled = false; btn.style.background = ''; }, 2000);
+        };
+
+        document.getElementById('btn-copy-zpl').onclick = function() {
+            navigator.clipboard.writeText(ZPL).then(() => {
+                this.textContent = '✅ Copiado!';
+                setTimeout(() => this.textContent = '📋 Copiar ZPL', 1500);
+            });
+        };
+
+        function checkPrintServer() {
+            fetch('http://localhost:9200/status').then(r => r.json()).then(d => {
+                document.getElementById('printer-status').textContent = '🟢 Print server online — ' + Object.keys(d.printers || {}).join(', ');
+            }).catch(() => {
+                document.getElementById('printer-status').textContent = '🔴 Print server offline — rode: node print-server.js';
+            });
+        }
+
+        function renderZplToCanvas(zpl) {
+            const canvas = document.getElementById('zpl-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const cmds = zpl.split(/\\n|\\r\\n/).map(s => s.trim()).filter(Boolean);
+            let scaleX = 1, scaleY = 1;
+
+            for (const cmd of cmds) {
+                if (cmd.startsWith('^XZ') || cmd.startsWith('^XA') || cmd.startsWith('^MC')) continue;
+
+                if (cmd.startsWith('^POI')) { /* invert */ }
+                else if (cmd.startsWith('^LS')) { /* label start */ }
+                else if (cmd.startsWith('^LH')) { /* label home */ }
+                else if (cmd.startsWith('^BY')) { /* barcode ratio */ }
+                else if (cmd.startsWith('^FW')) { /* field orientation */ }
+                else if (cmd.startsWith('^CI')) { /* code page */ }
+                else if (cmd.startsWith('^PR')) { /* print rate */ }
+
+                // ^FO x,y — field origin
+                const foMatch = cmd.match(/\\^FO(\\d+),(\\d+)/);
+                if (foMatch) {
+                    var curX = parseInt(foMatch[1]), curY = parseInt(foMatch[2]);
+                }
+
+                // ^GB w,h,t,c — graphic box
+                const gbMatch = cmd.match(/\\^GB(\\d+),(\\d+),(\\d+)/);
+                if (gbMatch && curX !== undefined) {
+                    const bw = parseInt(gbMatch[1]), bh = parseInt(gbMatch[2]), bt = parseInt(gbMatch[3]);
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = Math.max(bt, 1);
+                    ctx.strokeRect(curX, curY, bw, bh);
+                }
+
+                // ^A0 f,h,w — font
+                const a0Match = cmd.match(/\\^A(\\w)(\\d+),(\\d+)/);
+                if (a0Match) {
+                    var curFontSize = parseInt(a0Match[2]);
+                    var curFontH = parseInt(a0Match[2]);
+                }
+
+                // ^FD data — field data
+                const fdMatch = cmd.match(/\\^FD(.+?)\\^FS/);
+                if (fdMatch && curX !== undefined) {
+                    const data = fdMatch[1].replace(/_/g, ' ').replace(/\\\\&/g, '\\n').replace(/\\\\-/, '-');
+                    const fontSize = curFontSize || 28;
+                    ctx.fillStyle = '#000';
+                    ctx.font = fontSize + 'px Courier New';
+                    const lines = data.split('\\n');
+                    lines.forEach((line, i) => {
+                        ctx.fillText(line.trim(), curX + 2, curY + fontSize + (i * fontSize));
+                    });
+                }
+
+                // ^BCN — Code 128 barcode
+                if (cmd.startsWith('^BC')) {
+                    var curBarcode = true;
+                }
+
+                // ^BXN — 2D barcode (DataMatrix)
+                if (cmd.startsWith('^BX')) {
+                    if (curX !== undefined) {
+                        ctx.fillStyle = '#000';
+                        ctx.fillRect(curX + 10, curY + 10, 80, 80);
+                        ctx.fillStyle = '#fff';
+                        ctx.font = '10px monospace';
+                        ctx.fillText('[QR]', curX + 30, curY + 55);
+                    }
+                }
+
+                // ^FD in barcode context
+                if (curBarcode && cmd.startsWith('^FD')) {
+                    curBarcode = false;
+                }
+            }
+        }
+    <\\/script>
+</body></html>`);
+    w.document.close();
 }
 
 function getPrinterConfig() {
